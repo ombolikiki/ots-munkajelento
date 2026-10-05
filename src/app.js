@@ -16,6 +16,7 @@ import * as lower from "./ui/lower.js";
 import * as settings from "./ui/settings.js";
 import * as ots from "./ui/ots.js";
 import * as wiz from "./ui/skill-wizard.js";
+import * as calui from "./ui/calendar-ui.js";
 import { playSound, notify, NO_SOUND } from "./ui/sound.js";
 import { parseYMD } from "./dates.js";
 
@@ -114,7 +115,7 @@ function bodyHTML() {
   const tabs = `<nav class="tabs" role="tablist" aria-label="Fő lapok">${TABS.map(([k, ic, t]) => `<button role="tab" data-action="tab" data-tab="${k}" aria-selected="${ui.mode === k}">${icon(ic, 1.05)}<span>${t}</span></button>`).join("")}</nav>`;
   const view = ui.mode === "timer" ? capture.timerHTML() : ui.mode === "manual" ? capture.manualHTML() : ui.mode === "pomodoro" ? capture.pomodoroHTML() : cal.calendarHTML();
   const hideLower = (ui.mode === "pomodoro" && ui.pomoSettings) || (ui.mode === "calendar" && ui.pending);
-  return tabs + view + (hideLower ? "" : lower.dayListHTML() + lower.attendanceHTML() + lower.missingHTML()) + footerHTML();
+  return tabs + view + (hideLower ? "" : lower.dayListHTML() + lower.attendanceHTML() + lower.missingHTML() + calui.calendarCardHTML()) + footerHTML();
 }
 
 function modalHTML() {
@@ -144,7 +145,7 @@ function render() {
 // ---------- Műveletek ----------
 
 const actions = {
-  ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions,
+  ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions, ...calui.actions,
   tab(el) { ui.mode = el.dataset.tab; if (ui.mode !== "calendar") ui.pending = null; ui.msg = null; },
   pick(el) { fieldsPick(el); },
   qty(el) { S.draft.quantity = Math.min(99, Math.max(1, S.draft.quantity + Number(el.dataset.d))); store.saveDraft(); },
@@ -230,7 +231,8 @@ function onInput(ev) {
       } else capture.refreshGate();
       return;
     case "pomo": if (isChange) { store.saveSettings({ pomo: { ...S.settings.pomo, [f]: value } }); render(); } return;
-    case "set": if (isChange) { settings.onSettingChange(el); render(); } return;
+    case "set": if (isChange) { settings.onSettingChange(el); render(); if (f === "syncEnabled" && value) calui.syncNow({ auto: false }); } return;
+    case "calsel": if (isChange) { calui.onCalSelect(el); render(); } return;
     case "ui": ui[f] = value; return;
     case "cat": if (isChange) { if (!store.renameCategory(el.dataset.code, value)) ctx.say("A kategória neve nem lehet üres.", true); render(); } return;
     case "hide": if (isChange) { store.setBuiltinHidden(el.dataset.code, !el.checked); render(); } return;
@@ -295,7 +297,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); refreshFromFolder(); render(); }
   else store.flush();
 });
-window.addEventListener("focus", refreshFromFolder);
+window.addEventListener("focus", () => { refreshFromFolder(); calui.maybeSyncOnFocus(); });
 window.addEventListener("pagehide", () => { store.flush(); });
 
 navigator.storage?.persist?.().catch(() => {});
@@ -313,4 +315,5 @@ try {
 
 if (location.hostname === "localhost") window.__ots = { store, ui, render };   // csak helyi fejlesztéshez
 render();
+calui.initCalendar();
 store.startSync().then(() => render()).catch(() => render());

@@ -7,6 +7,7 @@ import { ctx, ui } from "./ctx.js";
 import { esc } from "./util.js";
 import { icon } from "./icons.js";
 import { SOUNDS, NO_SOUND, playSound } from "./sound.js";
+import { calendarSettingsHTML } from "./calendar-ui.js";
 
 export const VERSION = "0.2.0";
 const PALETTE_INFO = {
@@ -152,7 +153,7 @@ function resetCard() {
 
 export function settingsHTML() {
   const s = ctx.S.settings;
-  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), placesCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
+  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), calendarSettingsHTML(), placesCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
     `<p class="small mut center">OTS Munkajelentő (web) ${VERSION} · <a href="adatvedelem.html" target="_blank" rel="noopener">Adatvédelem</a> · <a href="felhasznalasi-feltetelek.html" target="_blank" rel="noopener">Felhasználási feltételek</a></p>`].join("");
 }
 

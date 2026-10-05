@@ -8,6 +8,7 @@ import { esc, $, timeValue } from "./util.js";
 import { icon } from "./icons.js";
 import { fieldsHTML } from "./fields.js";
 import { askNotifications } from "./sound.js";
+import { resolveBannerHTML, linkResolved } from "./calendar-ui.js";
 
 const bigBtn = (cls, action, ic, label, disabled = false, id = "") =>
   `<button class="big ${cls}" ${id ? `id="${id}"` : ""} data-action="${action}" ${disabled ? "disabled" : ""}>${icon(ic, 1.05)}<span>${label}</span></button>`;
@@ -52,7 +53,7 @@ export function manualHTML() {
   manualDefaults();
   const m = ui.manual, S = ctx.S, type = draftType(S.draft), whole = isWholeDay(type), needsTime = type && type.unit === UNIT.HOURS;
   const r = manualResult();
-  let h = fieldsHTML() + `<section class="card manual"><label class="f"><span>Nap</span><input type="date" data-ns="manual" data-field="day" value="${esc(ui.day)}" max="${todayYMD()}"></label>`;
+  let h = resolveBannerHTML() + fieldsHTML() + `<section class="card manual"><label class="f"><span>Nap</span><input type="date" data-ns="manual" data-field="day" value="${esc(ui.day)}" max="${todayYMD()}"></label>`;
   if (needsTime) {
     h += `<div class="seg"><button type="button" data-action="mmode" data-mode="range" aria-pressed="${m.mode === "range"}">Időpont (tól–ig)</button>
       <button type="button" data-action="mmode" data-mode="duration" aria-pressed="${m.mode === "duration"}">Óraszám</button></div>`;
@@ -162,7 +163,7 @@ export const actions = {
   manualSave() {
     const r = manualResult();
     if (!r.ok) { ctx.say(r.error, true); return; }
-    ctx.store.addEntry(r.entry); ctx.store.resetDraft();
+    ctx.store.addEntry(linkResolved(r.entry)); ctx.store.resetDraft();
     ui.manual.hours = 1; ui.manual.minutes = 0; ui.manual.message = "✓ Mentve";
     setTimeout(() => { ui.manual.message = null; ctx.render(); }, 2500);
   },

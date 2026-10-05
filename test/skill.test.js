@@ -15,7 +15,7 @@ test("a csomagolt sablon megvan, és személyes adat nélküli", () => {
   for (const t of bundle.tasks) for (const f of [...t.files, ...t.shared]) assert.ok(bundle.files[f], f);
   const all = Object.values(bundle.files).join("\n");
   for (const bad of ["Ömböli", "Krisztián", "Győr", "Tatabánya", "Toggl", "detkapu-adminisztracio"]) assert.equal(all.includes(bad), false, bad);
-  const template = new URL("../../skill-template/ots-adminisztracio/SKILL.md", import.meta.url);
+  const template = new URL("../skill-template/ots-adminisztracio/SKILL.md", import.meta.url);
   if (existsSync(template)) assert.equal(readFileSync(template, "utf8"), bundle.files["SKILL.md"], "a webes csomag elavult: futtasd a scripts/sync-web-skill.py-t");
 });
 

@@ -95,7 +95,7 @@ export function createSyncer(store, source) {
         const windowStart = addDays(toYMD(new Date(now)), -s.syncDays);
         const from = new Date(parseYMD(windowStart).y, parseYMD(windowStart).m - 1, parseYMD(windowStart).d).getTime();
         const selected = await source.events(new Set(s.syncCalendars), from, now);
-        const all = await source.events(null, from, now + 365 * 86400000);
+        const all = (await source.events(null, from, now + 365 * 86400000, { light: true })).filter((e) => !e.isCancelled);
         const p = plan({ events: selected, existenceIDs: new Set(all.map((e) => e.id)), existing: store.state.entries, now, home: s.home,
           windowStart, dismissed: new Set(s.syncDismissed) });
         const result = { added: p.toAdd.length, updated: p.toUpdate.length, deleted: p.toDelete.length, heldDeletions: p.heldDeletions.length,

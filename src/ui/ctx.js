@@ -11,6 +11,7 @@ export const ui = {
   ots: { y: 0, m: 0, copied: null },
   skill: null, colorOpen: null, newPlace: "", newCongregation: "", newCategory: "", newCategoryUnit: "hours", catEdit: null,
   catOpen: false, resetOpen: false, hex: "",
+  cal: { calendars: [], busy: false, error: null, needsLogin: {}, lastAuto: 0, resolve: null, helpOpen: false },
 };
 
 export const ctx = { store: null, S: null, render: () => {}, say: () => {}, now: () => Date.now() };

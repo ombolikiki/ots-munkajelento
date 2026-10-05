@@ -1,0 +1,63 @@
+{
+  "tasks": [
+    {
+      "id": "havi",
+      "name": "Havi munkajelentő",
+      "files": [
+        "references/havi-munkajelento.md"
+      ],
+      "shared": [
+        "references/tracker-adatforras.md"
+      ],
+      "needs": []
+    },
+    {
+      "id": "koltseg",
+      "name": "Költségelszámolás",
+      "files": [
+        "references/koltsegelszamolas.md"
+      ],
+      "shared": [
+        "references/tracker-adatforras.md"
+      ],
+      "needs": [
+        "home"
+      ]
+    },
+    {
+      "id": "nevsor",
+      "name": "Gyülekezeti névsor",
+      "files": [
+        "references/gyulekezeti-nevsor.md"
+      ],
+      "shared": [],
+      "needs": [
+        "congregations"
+      ]
+    },
+    {
+      "id": "hittan",
+      "name": "Hittan (hitoktatás)",
+      "files": [
+        "references/hitoktatas.md"
+      ],
+      "shared": [],
+      "needs": [
+        "congregations"
+      ]
+    },
+    {
+      "id": "latogatottsag",
+      "name": "Gyülekezeti látogatottság",
+      "files": [
+        "references/latogatottsag.md"
+      ],
+      "shared": [
+        "references/tracker-adatforras.md"
+      ],
+      "needs": [
+        "congregations"
+      ]
+    }
+  ]
+}

@@ -31,15 +31,15 @@ A `docs/NAPTAR_JELOLESEK.md` (közös, végleges előírás) szerint, a Mac-alka
 
 ## Tesztek és fejlesztés
 ```bash
-cd web && node --test test/*.test.js
+node --test test/*.test.js
 for TZ in Europe/Budapest America/New_York Pacific/Auckland UTC; do TZ=$TZ node --test test/*.test.js; done
-../scripts/dev-server.py        # helyi szerver gyorsítótár nélkül: http://localhost:8123
-../scripts/sync-web-skill.py    # a skill sablonból újraépíti a web/skill/bundle.json csomagot
+scripts/dev-server.py           # helyi szerver gyorsítótár nélkül: http://localhost:8123
+scripts/sync-web-skill.py       # a skill-template mappából újraépíti a skill/bundle.json csomagot
 ```
-A közzététel: `./scripts/publish-web.sh "üzenet"` (a skill-csomagot is frissíti, lefuttatja a teszteket). Az `sw.js` `CACHE` nevét minden változásnál emeld, az új fájlokat vedd fel a `FILES` listába.
+A közzététel: `./scripts/publish.sh "üzenet"` (a skill-csomagot is frissíti, négy időzónában lefuttatja a teszteket, commitol és pushol ebben a tárban). Az `sw.js` `CACHE` nevét minden változásnál emeld, az új fájlokat vedd fel a `FILES` listába.
 
 ## Felépítés
-Sima JavaScript, függőség nélkül (ES modulok). Logika: `src/dates.js` (védett dátumkezelés), `types.js` (típusok, saját kategóriák, színek), `csv.js`, `attendance.js`, `entries.js`, `insights.js`, `manual.js` (Kézi felvitel az OTS-be), `calendar.js`, `pomodoro.js`, `folder.js` (adatmappa), `store.js` (állapot és mentés), `skill.js` (skill kitöltése, ZIP). Felület: `src/app.js` és `src/ui/*` (fülek, naptár, beállítások, ablakok, varázsló). A szabályok megegyeznek a Mac-alkalmazáséval (lásd a projekt `CLAUDE.md` fájlját): a dátumszámítás nem omolhat össze (a napokat `ÉÉÉÉ-HH-NN` szövegként kezeljük), szám- és CSV-olvasás védett, jövőbeli bejegyzés nem rögzíthető, 1 fő/alkalom = 1 óra.
+Sima JavaScript, függőség nélkül (ES modulok). Logika: `src/dates.js` (védett dátumkezelés), `types.js` (típusok, saját kategóriák, színek), `csv.js`, `attendance.js`, `entries.js`, `insights.js`, `manual.js` (Kézi felvitel az OTS-be), `calendar.js`, `pomodoro.js`, `folder.js` (adatmappa), `store.js` (állapot és mentés), `skill.js` (skill kitöltése, ZIP). Felület: `src/app.js` és `src/ui/*` (fülek, naptár, beállítások, ablakok, varázsló). A szabályok megegyeznek a Mac-alkalmazáséval (lásd a `CLAUDE.md` fájlt): a dátumszámítás nem omolhat össze (a napokat `ÉÉÉÉ-HH-NN` szövegként kezeljük), szám- és CSV-olvasás védett, jövőbeli bejegyzés nem rögzíthető, 1 fő/alkalom = 1 óra.
 
 ## Amit nem láttunk élesben
 A Windowst, a Chrome valódi mappaválasztóját (és a tiltott mappákat), a Chrome engedély-újrakérését és a skill kiírását a `.claude`/`.agents` mappákba itt nem lehet kipróbálni; a logikát tesztek (hamis mappával), a valódi böngészős mappa-írást a beépített böngészőben a böngésző saját (OPFS) mappájával ellenőriztük.
