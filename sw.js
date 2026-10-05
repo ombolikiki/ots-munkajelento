@@ -1,7 +1,7 @@
 // Offline működés: az alkalmazás fájljait gyorsítótárazza (az adatok a böngésző tárhelyén és az adatmappában vannak, nem itt).
-const CACHE = "ots-web-v5";
+const CACHE = "ots-web-v6";
 const FILES = [
-  "./", "./index.html", "./style.css", "./manifest.webmanifest", "./skill/bundle.json",
+  "./", "./index.html", "./style.css", "./adatvedelem.html", "./felhasznalasi-feltetelek.html", "./manifest.webmanifest", "./skill/bundle.json",
   "./src/app.js", "./src/attendance.js", "./src/calendar.js", "./src/calendarParser.js", "./src/calendarSync.js", "./src/csv.js", "./src/dates.js", "./src/entries.js", "./src/folder.js", "./src/insights.js",
   "./src/manual.js", "./src/pomodoro.js", "./src/skill.js", "./src/store.js", "./src/types.js",
   "./src/ui/calendar-view.js", "./src/ui/capture.js", "./src/ui/ctx.js", "./src/ui/fields.js", "./src/ui/icons.js", "./src/ui/lower.js",

@@ -153,7 +153,7 @@ function resetCard() {
 export function settingsHTML() {
   const s = ctx.S.settings;
   return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), placesCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
-    `<p class="small mut center">OTS Munkajelentő (web) ${VERSION}</p>`].join("");
+    `<p class="small mut center">OTS Munkajelentő (web) ${VERSION} · <a href="adatvedelem.html" target="_blank" rel="noopener">Adatvédelem</a> · <a href="felhasznalasi-feltetelek.html" target="_blank" rel="noopener">Felhasználási feltételek</a></p>`].join("");
 }
 
 // ---------- Műveletek ----------

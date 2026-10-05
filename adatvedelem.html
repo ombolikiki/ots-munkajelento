@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adatvédelmi tájékoztató – OTS Munkajelentő</title>
+  <meta name="color-scheme" content="light dark">
+  <style>
+    :root { --fg: #1a2230; --mut: #5d697b; --bg: #f6f8fb; --ac: #2a6bbd; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #e8ecf3; --mut: #98a3b5; --bg: #141922; --ac: #5b9bea; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 "Segoe UI", system-ui, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 28px 0 8px; }
+    .mut { color: var(--mut); } a { color: var(--ac); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Adatvédelmi tájékoztató</h1>
+  <p class="mut">OTS Munkajelentő (webalkalmazás) · Hatályos: 2026. október 5-től</p>
+
+  <p>Az <a href="./">OTS Munkajelentő</a> egy időnapló lelkészeknek és gyülekezeti munkatársaknak. Ez a tájékoztató leírja, milyen adatot kezel, és mit nem.</p>
+
+  <h2>Röviden</h2>
+  <p><strong>Az adataid nem hagyják el a saját böngésződet és a saját számítógépedet.</strong> Az alkalmazásnak nincs szervere, nincs felhasználói fiókja, nincs követése (analitika, hirdetés, sütik), és semmit nem küld a fejlesztőnek vagy harmadik félnek.</p>
+
+  <h2>Milyen adatot kezel az alkalmazás?</h2>
+  <ul>
+    <li><strong>Az általad rögzített munkaidő-adatok</strong> (bejegyzések, helyszínek, létszámjelentések, beállítások): a böngésző helyi tárhelyén, és ha kiválasztasz egy adatmappát, az ott lévő CSV-fájlokban vannak. Ezeket csak te éred el.</li>
+    <li><strong>Naptáradatok (opcionális):</strong> ha te magad összekötöd a Google Naptárat vagy a Microsoft (Outlook) naptárat, az alkalmazás a bejelentkezésed után <strong>csak olvassa</strong> a kiválasztott naptáraid eseményeit (cím, helyszín, leírás, időpont), és a munkaidő-bejegyzések elkészítéséhez használja. A naptárt nem módosítja, nem törli, és nem ír bele.</li>
+    <li><strong>Hozzáférési token:</strong> a bejelentkezéskor kapott ideiglenes hozzáférési jelet az alkalmazás csak a böngésződben tárolja. Jelszót nem lát és nem tárol.</li>
+  </ul>
+
+  <h2>Mire használjuk, és kinek adjuk át?</h2>
+  <p>A naptáradatokat kizárólag arra használjuk, hogy a munkaidő-bejegyzéseidet előkészítsük a saját készülékeden. <strong>Az adatokat nem tároljuk szerveren, nem osztjuk meg, nem adjuk el, és nem használjuk hirdetésre, profilozásra vagy mesterséges intelligencia tanítására.</strong> A Google API-kon keresztül kapott adatok felhasználása és továbbadása megfelel a <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a> előírásainak, beleértve a Korlátozott használatra vonatkozó követelményeket.</p>
+  <p>A hozzáférést a lekérdezés közben közvetlenül a böngésződ és a Google, illetve a Microsoft szolgáltatása között történik; az alkalmazás üzemeltetője ebbe nem lát bele.</p>
+
+  <h2>Hogyan vonhatod vissza a hozzáférést, és hogyan törölheted az adatot?</h2>
+  <ul>
+    <li>A naptár-kapcsolatot az alkalmazásban bármikor megszüntetheted.</li>
+    <li>A Google-hozzáférést itt vonhatod vissza: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. A Microsoft-hozzáférést itt: <a href="https://account.live.com/consent/Manage">account.live.com/consent/Manage</a> (munkahelyi fiókoknál a „Saját alkalmazások” oldalon).</li>
+    <li>Az alkalmazás adatait a Beállítások › „Adatok törlése” résznél, illetve a böngésző adatainak és az adatmappa fájljainak törlésével távolíthatod el. Mivel az adat nálunk nincs, tőlünk nincs mit törölni.</li>
+  </ul>
+
+  <h2>Külső szolgáltatások</h2>
+  <p>A weboldalt a GitHub Pages szolgálja ki, ezért a GitHub technikai naplókat (például IP-címet) kezelhet az oldal letöltésekor; erre a <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub adatvédelmi nyilatkozata</a> vonatkozik. A naptár-bejelentkezést a Google, illetve a Microsoft végzi a saját szabályaik szerint.</p>
+
+  <h2>Kapcsolat</h2>
+  <p>Kérdés vagy észrevétel esetén írj nekünk a projekt oldalán: <a href="https://github.com/ombolikiki/ots-munkajelento/issues">github.com/ombolikiki/ots-munkajelento/issues</a>.</p>
+  <p class="mut">Az alkalmazás szabályairól lásd a <a href="felhasznalasi-feltetelek.html">Felhasználási feltételeket</a>.</p>
+</main>
+</body>
+</html>
