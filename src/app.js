@@ -1,269 +1,191 @@
-// Mobilos felület: négy lap (Időzítő, Bevitel, Napok, Adatok). Minden adat csak ezen a készüléken marad.
-import { groupedTypes, typeOfEntry, typeColor, isTravel, isWholeDay, hasQuantity, quantityUnit, UNIT } from "./types.js";
-import { todayYMD, addDays, formatLong, formatHM, formatClock, parseYMD } from "./dates.js";
-import { officialSeconds, targetState, missingDays, needsBackupReminder } from "./insights.js";
-import { gate, draftType, manualEntry, workplaceList } from "./entries.js";
-import { encodeBytes, decode } from "./csv.js";
+// OTS Munkajelentő (webalkalmazás): a natív Mac-alkalmazás funkcióival, asztali (Windows/Chrome) használatra.
+// Az adatok a böngészőben és (kiválasztott adatmappa esetén) automatikusan a számítógépen lévő CSV-fájlokban vannak.
 import { createStore } from "./store.js";
-import { resolveLayout, toggledLayout, LAYOUTS } from "./layout.js";
+import { createFolder, idbHandleStore, folderSupported } from "./folder.js";
+import { encodeBytes, decode } from "./csv.js";
+import { todayYMD, addDays, formatHM } from "./dates.js";
+import { creditSeconds, consecutiveMissingDays, groupByDate } from "./insights.js";
+import * as P from "./pomodoro.js";
+import { ctx, ui } from "./ui/ctx.js";
+import { esc, $ } from "./ui/util.js";
+import { icon } from "./ui/icons.js";
+import { fieldsHTML, pickPlace } from "./ui/fields.js";
+import * as capture from "./ui/capture.js";
+import * as cal from "./ui/calendar-view.js";
+import * as lower from "./ui/lower.js";
+import * as settings from "./ui/settings.js";
+import * as ots from "./ui/ots.js";
+import * as wiz from "./ui/skill-wizard.js";
+import { playSound, notify, NO_SOUND } from "./ui/sound.js";
+import { parseYMD } from "./dates.js";
 
-const VERSION = "0.1.0";
-const store = createStore(window.localStorage);
+let store;
+try {
+  const supported = folderSupported();
+  const folder = createFolder({
+    supported,
+    handleStore: supported ? idbHandleStore() : { get: async () => null, set: async () => {}, delete: async () => {} },
+    picker: () => window.showDirectoryPicker({ id: "ots-adatok", mode: "readwrite", startIn: "documents" }),
+  });
+  store = createStore(window.localStorage, { folder, onSyncChange: () => scheduleRender() });
+} catch (e) {
+  store = createStore(window.localStorage);
+}
 const S = store.state;
+ctx.store = store; ctx.S = S; ctx.render = () => render(); ctx.now = () => Date.now();
 
-const ui = {
-  tab: "timer",
-  day: todayYMD(),
-  manual: { day: todayYMD(), mode: "range", from: "", to: "", hours: 1, minutes: 0 },
-  msg: null, msgErr: false,
-  confirmDelete: null, confirmReset: false, update: false,
-};
-let tickHandle = null, msgHandle = null;
-
-const layoutNow = () => resolveLayout(S.settings.layout, window.innerWidth);
-let lastLayout = null;
-
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const $ = (sel) => document.querySelector(sel);
-
-function say(text, isErr = false, ms = 4000) {
+let msgHandle = null;
+ctx.say = (text, isErr = false, ms = 4000) => {
   ui.msg = text; ui.msgErr = isErr;
   clearTimeout(msgHandle);
   if (ms) msgHandle = setTimeout(() => { ui.msg = null; render(); }, ms);
+};
+
+let renderQueued = false;
+function scheduleRender() { if (renderQueued) return; renderQueued = true; queueMicrotask(() => { renderQueued = false; render(); }); }
+
+// ---------- Megjelenés ----------
+
+function applyTheme() {
+  const root = document.documentElement, s = S.settings;
+  root.dataset.palette = s.palette;
+  if (s.appearance === "system") delete root.dataset.theme; else root.dataset.theme = s.appearance;
+  const [, a] = settings.paletteInfo[s.palette] || [];
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && a) meta.content = a;
 }
 
-// ---------- Segédek ----------
+const TABS = [["timer", "stopwatch", "Időzítő"], ["manual", "edit", "Kézi bevitel"], ["pomodoro", "timer", "Pomodoro"], ["calendar", "calendar", "Naptár"]];
 
-const typeLabelFor = (code) => draftType({ typeCode: code })?.label ?? "";
-
-function entryAmount(e) {
-  if (e.unit === UNIT.OCCASIONS) return `${e.quantity ?? 1} alkalom`;
-  if (e.unit === UNIT.PEOPLE) return `${e.quantity ?? 1} fő`;
-  if (e.unit === UNIT.WHOLE_DAY) return "";
-  return formatHM(e.durationSeconds);
+function todaySummary() {
+  const list = S.entries.filter((e) => e.date === todayYMD());
+  const secs = list.reduce((a, e) => a + creditSeconds(e), 0);
+  return list.length ? `Ma: ${formatHM(secs)} óra · ${list.length} bejegyzés` : "Ma még nincs bejegyzés";
 }
 
-function entryWhen(e) {
-  if (e.unit === UNIT.WHOLE_DAY) return "egész nap";
-  if (e.start && e.end) return `${e.start.slice(0, 5)}–${e.end.slice(0, 5)}`;
-  return e.unit === UNIT.HOURS ? "óraszám" : "";
+function headerHTML() {
+  return `<header class="apphead"><div class="logo">${icon("logo", 1.2)}</div><div class="titles"><h1>OTS Munkajelentő Tracker</h1><p>${esc(todaySummary())}</p></div>
+    <button class="iconbtn" data-action="openOts" title="Kézi felvitel az OTS-be: a bejegyzések listája és táblázata" aria-label="Kézi felvitel az OTS-be">${icon("tablecells", 1.25)}</button>
+    <button class="iconbtn" data-action="toggleSettings" title="${ui.settings ? "Vissza" : "Beállítások"}" aria-label="${ui.settings ? "Vissza" : "Beállítások"}">${icon(ui.settings ? "x" : "gear", 1.25)}</button></header>`;
 }
 
-function entryDetail(e) {
-  if (e.departure || e.arrival) {
-    const route = [e.departure, ...workplaceList(e.workplace), e.arrival].filter(Boolean).join(" → ");
-    return [route, e.activity].filter(Boolean).join(" · ");
+function reminderHTML() {
+  const s = S.settings;
+  if (!s.reminderEnabled) return "";
+  const n = consecutiveMissingDays(new Set(S.entries.map((e) => e.date)), todayYMD());
+  if (n < s.reminderDays) return "";
+  return `<div class="reminder">${icon("alert", 1.1)}<strong>${n} napja nem írtál munkajelentőt.</strong><span class="grow"></span><button class="linkbtn acc small" data-action="remindFill">Kézi bevitel</button></div>`;
+}
+
+function folderBannerHTML() {
+  const f = store.folder;
+  if (!f || ui.settings) return "";
+  if (f.status === "none" && !ui.folderBannerHidden) {
+    return `<div class="banner">${icon("folder", 1.1)}<div><strong>Válaszd ki az adatmappát</strong><div class="small mut">Így minden bejegyzés magától a számítógépedre is mentődik (bejegyzesek.csv), és a skill eléri.</div></div>
+      <button class="btn small" data-action="folderChoose">Kiválasztás…</button><button class="iconbtn sm" data-action="bannerHide" aria-label="Elrejtés">${icon("x", 1)}</button></div>`;
   }
-  return [e.workplace, e.activity].filter(Boolean).join(" · ");
+  if (f.status === "needs-permission") {
+    return `<div class="banner warn">${icon("alert", 1.1)}<div><strong>Engedélyezd az adatmappát</strong><div class="small mut">A böngésző újra kéri a(z) „${esc(f.name)}” mappa elérését. Addig a változások csak a böngészőben vannak.</div></div><button class="btn small" data-action="folderGrant">Engedélyezés</button></div>`;
+  }
+  return "";
 }
 
-const entriesOn = (day) => S.entries.filter((e) => e.date === day);
-
-function stateColor(state) {
-  return state === "short" ? "var(--stop)" : state === "inProgress" ? "var(--warn)" : state === "reached" ? "var(--go)" : "transparent";
-}
-
-// ---------- Űrlap (közös az Időzítő és a Bevitel lapon) ----------
-
-function placeChips(target) {
-  const list = S.places.slice(0, 12);
-  if (!list.length) return "";
-  return `<div class="chips scroll-x">${list.map((p) => `<button type="button" class="chip" data-action="pick" data-target="${target}" data-value="${esc(p)}">${esc(p)}</button>`).join("")}</div>`;
-}
-
-function formHTML(locked) {
-  const d = S.draft, type = draftType(d), travel = isTravel(type), whole = isWholeDay(type);
-  const dis = locked ? "disabled" : "";
-  const typeOptions = groupedTypes().map((g) =>
-    `<optgroup label="${esc(g.name)}">${g.types.map((t) => `<option value="${t.code}" ${d.typeCode === t.code ? "selected" : ""}>${esc(t.label)}</option>`).join("")}</optgroup>`).join("");
-  let h = `<section class="card form">
-    <label class="f"><span>Tevékenység típusa</span>
-      <select data-ns="draft" data-field="typeCode" ${dis}><option value="">Válassz típust…</option>${typeOptions}</select></label>`;
-  if (type && !whole) {
-    h += `<label class="f"><span>${travel ? "Munkahely(ek)" : "Munkahely"}</span>
-      <input type="text" data-ns="draft" data-field="workplace" list="places" value="${esc(d.workplace)}" placeholder="${travel ? "pl. Tata, Tatabánya" : "Település"}" autocomplete="off" ${dis}></label>
-      ${locked ? "" : placeChips("workplace")}`;
-  }
-  if (travel) {
-    h += `<div class="row">
-      <label class="f"><span>Indulás</span><input type="text" data-ns="draft" data-field="departure" list="places" value="${esc(d.departure)}" placeholder="Indulás" autocomplete="off" ${dis}></label>
-      <label class="f"><span>Érkezés</span><input type="text" data-ns="draft" data-field="arrival" list="places" value="${esc(d.roundTrip ? d.departure : d.arrival)}" placeholder="Érkezés" autocomplete="off" ${dis || d.roundTrip ? "disabled" : ""}></label>
-    </div>
-    <label class="check"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""} ${dis}> Oda-vissza út (az Érkezés az Indulás)</label>
-    ${locked ? "" : placeChips("departure")}`;
-  }
-  if (hasQuantity(type)) {
-    h += `<div class="stepper"><span class="small">Mennyiség</span>
-      <button type="button" data-action="qty" data-d="-1" ${dis}>−</button>
-      <span class="val">${d.quantity} ${quantityUnit(type)}</span>
-      <button type="button" data-action="qty" data-d="1" ${dis}>+</button></div>`;
-  }
-  if (type) {
-    const label = whole ? "Megjegyzés (nem kötelező)" : travel ? "Tevékenység (kötelező, a Költségelszámoláshoz)" : "Tevékenység (nem kötelező)";
-    const ph = whole ? "Megjegyzés" : travel ? "Mi volt az út célja?" : "Mit csináltál?";
-    h += `<label class="f"><span>${label}</span><input type="text" data-ns="draft" data-field="activity" value="${esc(d.activity)}" placeholder="${ph}" autocomplete="off" ${dis}></label>`;
-  }
-  h += `<datalist id="places">${S.places.map((p) => `<option value="${esc(p)}"></option>`).join("")}</datalist></section>`;
+function bannersHTML() {
+  let h = "";
+  if (ui.update) h += `<div class="msg">Új változat érhető el. <button class="chip acc" data-action="reload">Frissítés</button></div>`;
+  if (ui.msg) h += `<div class="msg ${ui.msgErr ? "err" : ""}" role="status">${esc(ui.msg)}</div>`;
+  else if (store.error) h += `<div class="msg err">${esc(store.error)}</div>`;
+  if (S.sync.error && !ui.settings) h += `<div class="msg err">${esc(S.sync.error)}</div>`;
+  else if (S.sync.warning && !ui.settings) h += `<div class="msg warn">${esc(S.sync.warning)}</div>`;
   return h;
 }
 
-// ---------- Lapok ----------
-
-function timerView() {
-  const running = !!S.timer;
-  const g = gate("timer", S.draft);
-  let h = formHTML(running);
-  h += `<section class="card"><div class="clock" id="clock">${formatClock(running ? Math.floor((Date.now() - S.timer.startMs) / 1000) : 0)}</div>`;
-  if (running) {
-    const t = new Date(S.timer.startMs);
-    h += `<p class="sub">Indult: ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")} · ${esc(typeLabelFor(S.draft.typeCode))}</p>
-      <button class="btn stop" data-action="timerStop">Leállítás és mentés</button>
-      <p style="margin:8px 0 0"><button class="btn ghost small" data-action="timerDiscard">Elvetés</button></p>`;
-  } else {
-    h += `<button class="btn go" id="gateBtn" data-action="timerStart" ${g.disabled ? "disabled" : ""}>Start</button>
-      <p class="hint" id="gateHint" ${g.text ? "" : "hidden"}>${esc(g.text)}</p>`;
-  }
-  return h + `</section>`;
+function footerHTML() {
+  const f = store.folder;
+  let text;
+  if (f && f.status === "ready") text = `${icon("checkCircle", 0.9)} Automatikus mentés: ${esc(f.name)}`;
+  else if (f && f.status === "needs-permission") text = `${icon("alert", 0.9)} Az adatmappa engedélyre vár`;
+  else text = `${icon("alert", 0.9)} Az adatok csak a böngészőben vannak`;
+  return `<footer class="foot"><span class="small mut ${f && f.status === "ready" ? "okf" : ""}">${text}</span><button class="linkbtn small" data-action="toggleSettings">Beállítások</button></footer>`;
 }
 
-function manualView() {
-  const m = ui.manual, type = draftType(S.draft), whole = isWholeDay(type);
-  const needsTime = type && type.unit === UNIT.HOURS;
-  const g = gate("manual", S.draft);
-  let h = formHTML(false);
-  h += `<section class="card"><label class="f"><span>Nap</span>
-      <input type="date" data-ns="manual" data-field="day" value="${esc(m.day)}" max="${todayYMD()}"></label>`;
-  if (needsTime) {
-    h += `<div class="seg"><button type="button" data-action="mode" data-mode="range" aria-pressed="${m.mode === "range"}">Időpont (tól–ig)</button>
-      <button type="button" data-action="mode" data-mode="duration" aria-pressed="${m.mode === "duration"}">Óraszám</button></div>`;
-    if (m.mode === "range") {
-      h += `<div class="row"><label class="f"><span>Tól</span><input type="time" data-ns="manual" data-field="from" value="${esc(m.from)}"></label>
-        <label class="f"><span>Ig</span><input type="time" data-ns="manual" data-field="to" value="${esc(m.to)}"></label></div>`;
-    } else {
-      h += `<div class="stepper"><button type="button" data-action="step" data-field="hours" data-d="-1">−</button><span class="val">${m.hours} óra</span><button type="button" data-action="step" data-field="hours" data-d="1">+</button></div>
-        <div class="stepper"><button type="button" data-action="step" data-field="minutes" data-d="-5">−</button><span class="val">${m.minutes} perc</span><button type="button" data-action="step" data-field="minutes" data-d="5">+</button></div>`;
-    }
-  } else if (type && !whole) {
-    h += `<p class="small">Ennél a típusnál nem kell időtartam, csak a mennyiség.</p>`;
-  }
-  h += `<button class="btn" id="gateBtn" data-action="manualSave" ${g.disabled ? "disabled" : ""}>Rögzítés</button>
-    <p class="hint" id="gateHint" ${g.text ? "" : "hidden"}>${esc(g.text)}</p>`;
-  return h + `</section>`;
+function bodyHTML() {
+  if (ui.settings) return settings.settingsHTML();
+  const tabs = `<nav class="tabs" role="tablist" aria-label="Fő lapok">${TABS.map(([k, ic, t]) => `<button role="tab" data-action="tab" data-tab="${k}" aria-selected="${ui.mode === k}">${icon(ic, 1.05)}<span>${t}</span></button>`).join("")}</nav>`;
+  const view = ui.mode === "timer" ? capture.timerHTML() : ui.mode === "manual" ? capture.manualHTML() : ui.mode === "pomodoro" ? capture.pomodoroHTML() : cal.calendarHTML();
+  const hideLower = (ui.mode === "pomodoro" && ui.pomoSettings) || (ui.mode === "calendar" && ui.pending);
+  return tabs + view + (hideLower ? "" : lower.dayListHTML() + lower.attendanceHTML() + lower.missingHTML()) + footerHTML();
 }
 
-function daysView() {
-  const today = todayYMD(), day = ui.day;
-  const list = entriesOn(day);
-  const state = targetState(day, list, today, S.settings.targetHours);
-  const official = officialSeconds(list);
-  const all = list.reduce((s, e) => s + (e.unit === UNIT.HOURS ? e.durationSeconds : e.unit === UNIT.WHOLE_DAY ? 0 : Math.max(1, e.quantity ?? 1) * 3600), 0);
-  let h = "";
-  if (needsBackupReminder(S.entries, S.meta.lastExport, today)) {
-    h += `<div class="msg err">Régen nem mentettél CSV-t. Az adatok csak ezen a telefonon vannak, ezért érdemes exportálni. <button class="chip acc" data-action="export">Exportálás most</button></div>`;
-  }
-  h += `<section class="card span2"><div class="daynav">
-      <button data-action="dayPrev" aria-label="Előző nap">‹</button>
-      <div class="title">${esc(formatLong(day))}<span class="dot" style="background:${stateColor(state)}"></span></div>
-      <button data-action="dayNext" aria-label="Következő nap" ${day >= today ? "disabled" : ""}>›</button></div>
-      ${day === today ? "" : `<p style="text-align:center;margin:8px 0 0"><button class="chip acc" data-action="dayToday">Ugrás a mai napra</button></p>`}</section>`;
-  h += `<section class="card">`;
-  if (!list.length) h += `<p class="empty">Nincs bejegyzés erre a napra.</p>`;
-  for (const e of list) {
-    const confirm = ui.confirmDelete === e.id;
-    h += `<div class="item"><span class="bar" style="background:${typeColor(typeOfEntry(e))}"></span>
-      <div class="main"><div class="t">${esc(entryWhen(e))} ${esc(e.typeLabel)}</div><div class="d">${esc(entryDetail(e))}</div></div>
-      <div class="amt">${esc(entryAmount(e))}</div>
-      <button class="del ${confirm ? "sure" : ""}" data-action="delete" data-id="${e.id}" aria-label="Törlés">${confirm ? "Biztos?" : "🗑"}</button></div>`;
-  }
-  if (list.length) {
-    const target = state === "exempt" ? "" : ` / ${S.settings.targetHours}:00`;
-    h += `<div class="total"><span>Összesen: ${formatHM(official)}${target}</span>${all !== official ? `<span>(saját kategóriával ${formatHM(all)})</span>` : ""}</div>`;
-  }
-  h += `</section>`;
-  const missing = missingDays(new Set(S.entries.map((e) => e.date)), today);
-  h += `<section class="card"><h2>Kitöltetlen napok ebben a hónapban (${missing.length})</h2>`;
-  h += missing.length
-    ? `<div class="scroll-x">${missing.slice().reverse().map((d) => `<button class="chip warn" data-action="dayGo" data-day="${d}">${esc(d.slice(5).replace("-", ". ") + ".")}</button>`).join("")}</div>`
-    : `<p class="empty">Minden nap ki van töltve.</p>`;
-  return h + `</section>`;
+function modalHTML() {
+  if (!ui.modal) return "";
+  const title = ui.modal === "ots" ? "Kézi felvitel az OTS-be" : "OTS Adminisztráció skill telepítése";
+  const inner = ui.modal === "ots" ? ots.otsHTML() : wiz.skillHTML();
+  return `<div class="overlay" data-action="modalBackdrop"><div class="modal ${ui.modal}" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="modaltitle"><strong>${title}</strong><button class="iconbtn" data-action="modalClose" aria-label="Bezárás">${icon("x")}</button></div>${inner}</div></div>`;
 }
 
-function dataView() {
-  const exp = S.meta.lastExport ? new Date(S.meta.lastExport).toLocaleDateString("hu-HU") : "még nem";
-  let h = `<section class="card"><h2>Beállítások</h2>
-    <label class="f"><span>Székhely (az Utazás alapértéke)</span><input type="text" data-ns="settings" data-field="home" value="${esc(S.settings.home)}" placeholder="pl. Pécs" autocomplete="off"></label>
-    <label class="f"><span>Napi elvárt óraszám (hétfőtől péntekig)</span><input type="number" min="1" max="12" inputmode="numeric" data-ns="settings" data-field="targetHours" value="${S.settings.targetHours}"></label>
-    <label class="f"><span>Nézet</span><select data-ns="settings" data-field="layout">${LAYOUTS.map((l) => `<option value="${l}" ${S.settings.layout === l ? "selected" : ""}>${{ auto: "Automatikus (széles ablakban asztali)", mobile: "Mobil", desktop: "Asztali (Windows)" }[l]}</option>`).join("")}</select></label></section>`;
-  h += `<section class="card"><h2>Helyszínek</h2><div class="list-places">`;
-  h += S.places.length ? S.places.map((p) => `<div class="place"><span>${esc(p)}</span><button data-action="placeRemove" data-value="${esc(p)}" aria-label="Törlés">✕</button></div>`).join("") : `<p class="empty">Még nincs mentett helyszín, rögzítéskor automatikusan épül.</p>`;
-  h += `</div><div class="row" style="margin-top:10px"><input type="text" id="newPlace" placeholder="Új helyszín" autocomplete="off"><button class="btn small" style="flex:none" data-action="placeAdd">Hozzáad</button></div></section>`;
-  h += `<section class="card"><h2>Adatok mentése és átvitele</h2>
-    <p class="tip">Az adataid <b>csak ezen a készüléken</b> vannak. A CSV ugyanolyan formátumú, mint az OTS Munkajelentő Tracker Mac-alkalmazásáé, így a Macen beolvasható, és a skill is használni tudja. Utolsó exportálás: ${esc(exp)}. Bejegyzések: ${S.entries.length}.</p>
-    <p><button class="btn" data-action="export">CSV exportálása</button></p>
-    <p><button class="btn ghost" data-action="importPick">CSV importálása (összefésülés)</button></p>
-    <input type="file" id="importFile" accept=".csv,text/csv,text/plain" hidden></section>`;
-  h += `<section class="card"><h2>Telepítés (főképernyő, tálca)</h2>
-    <p class="tip"><b>iPhone (Safari):</b> Megosztás ↑ › „Főképernyőhöz adás”. <b>Android (Chrome):</b> ⋮ menü › „Alkalmazás telepítése”. <b>Windows/Mac (Edge vagy Chrome):</b> a címsor jobb szélén a telepítés ikon, vagy a ⋯ menü › „Alkalmazások” › „Telepítés”. Így saját ikonja lesz, saját ablakban fut, és internet nélkül is működik.</p></section>`;
-  h += `<section class="card"><h2 class="danger">Összes adat törlése</h2>
-    <p class="tip">Törli a bejegyzéseket, a helyszíneket és a beállításokat erről a készülékről. Előtte exportálj!</p>
-    <button class="btn ghost ${ui.confirmReset ? "stop" : ""}" data-action="reset">${ui.confirmReset ? "Biztosan törlöm (még egy érintés)" : "Összes adat törlése…"}</button></section>`;
-  return h + `<p class="small span2" style="text-align:center">OTS Munkajelentő (web) ${VERSION} · helyben tároló változat</p>`;
-}
-
-/** Beíráskor frissíti a Start/Rögzítés gombot és a figyelmeztetést az űrlap újrarajzolása nélkül (így a billentyűzet nyitva marad). */
-function refreshGate() {
-  const g = gate(ui.tab, S.draft);
-  const btn = $("#gateBtn"), hint = $("#gateHint");
-  if (btn) btn.disabled = g.disabled;
-  if (hint) { hint.textContent = g.text; hint.hidden = !g.text; }
-}
-
-// ---------- Megjelenítés ----------
-
-const TABS = [["timer", "⏱", "Időzítő"], ["manual", "✎", "Bevitel"], ["days", "📅", "Napok"], ["data", "⚙", "Adatok"]];
+// ---------- Újrarajzolás (a görgetési helyek megmaradnak) ----------
 
 function render() {
-  clearInterval(tickHandle);
-  const today = todayYMD();
-  const todayList = entriesOn(today);
-  const desktop = layoutNow() === "desktop";
-  lastLayout = desktop ? "desktop" : "mobile";
-  document.documentElement.dataset.layout = lastLayout;
-  $("#head").innerHTML = `<div class="hrow"><div><h1>OTS Munkajelentő</h1><p>Ma: ${formatHM(officialSeconds(todayList))} óra · ${todayList.length} bejegyzés</p></div>
-    <button class="chip acc" data-action="layout" title="Váltás az elrendezések között">${desktop ? "📱 Mobil nézet" : "🖥 Asztali nézet"}</button></div>`;
-  $("#tabs").innerHTML = TABS.map(([k, ic, t]) => `<button data-action="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ""}><span class="ic">${ic}</span>${t}</button>`).join("");
-  let body = ui.tab === "timer" ? timerView() : ui.tab === "manual" ? manualView() : ui.tab === "days" ? daysView() : dataView();
-  const updateBar = ui.update ? `<div class="msg">Új változat érhető el. <button class="chip acc" data-action="reload">Frissítés</button></div>` : "";
-  const banner = updateBar + (ui.msg ? `<div class="msg ${ui.msgErr ? "err" : ""}" role="status">${esc(ui.msg)}</div>` : store.error ? `<div class="msg err">${esc(store.error)}</div>` : "");
-  $("#view").innerHTML = banner + body;
-  if (ui.tab === "timer" && S.timer) {
-    tickHandle = setInterval(() => {
-      const c = $("#clock");
-      if (c && S.timer) c.textContent = formatClock(Math.floor((Date.now() - S.timer.startMs) / 1000));
-    }, 1000);
-  }
+  applyTheme();
+  const keep = {};
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => { keep[el.dataset.keepScroll] = el.scrollTop; });
+  const winY = window.scrollY, active = document.activeElement, activeId = active && active.id;
+  const app = $("#app");
+  app.innerHTML = `<div class="panel ${ui.settings ? "is-settings" : ""}">${headerHTML()}${bannersHTML()}${ui.settings ? "" : reminderHTML() + folderBannerHTML()}${bodyHTML()}</div>${modalHTML()}`;
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => { if (keep[el.dataset.keepScroll] != null) el.scrollTop = keep[el.dataset.keepScroll]; });
+  if (ui.mode === "calendar" && !ui.settings && keep.cal == null) { const c = $("#calscroll"); if (c) c.scrollTop = 0; }
+  window.scrollTo(0, winY);
+  if (activeId) { const el = document.getElementById(activeId); if (el && el !== document.activeElement) { try { el.focus({ preventScroll: true }); } catch { /* nem baj */ } } }
+  capture.tickDOM();
 }
 
 // ---------- Műveletek ----------
 
-async function exportCSV() {
-  const bytes = encodeBytes(S.entries);
-  const file = new File([bytes], "bejegyzesek.csv", { type: "text/csv" });
+const actions = {
+  ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions,
+  tab(el) { ui.mode = el.dataset.tab; if (ui.mode !== "calendar") ui.pending = null; ui.msg = null; },
+  pick(el) { fieldsPick(el); },
+  qty(el) { S.draft.quantity = Math.min(99, Math.max(1, S.draft.quantity + Number(el.dataset.d))); store.saveDraft(); },
+  toggleSettings() { ui.settings = !ui.settings; ui.colorOpen = null; },
+  remindFill() { ui.day = addDays(todayYMD(), -1); ui.mode = "manual"; ui.pending = null; },
+  openOts() { ots.openOts(); },
+  openSkill() { wiz.openSkill(); },
+  modalClose() { ui.modal = null; ui.skill = null; },
+  modalBackdrop(el, ev) { if (ev.target === el) { ui.modal = null; ui.skill = null; } else return false; },
+  reload() { location.reload(); return false; },
+  bannerHide() { ui.folderBannerHidden = true; },
+  async folderChoose() {
+    const r = await store.chooseFolder();
+    if (r.ok) ctx.say(`Az adatmappa be van állítva: ${store.folder.name}.${(r.messages || []).length ? " " + r.messages.join(" ") : ""}`, false, 7000);
+    else if (!r.cancelled) ctx.say(r.error || "A mappa kiválasztása nem sikerült.", true, 10000);
+    render(); return false;
+  },
+  async folderGrant() {
+    const ok = await store.grantFolder();
+    ctx.say(ok ? "Az adatmappa újra elérhető, a változások kiírva." : "Az engedély nem lett megadva.", !ok);
+    render(); return false;
+  },
+  async folderForget() {
+    if (!confirm("Leválasztod az adatmappát? Az adatok megmaradnak a böngészőben és a mappában is, de az automatikus mentés leáll.")) return false;
+    await store.forgetFolder(); render(); return false;
+  },
+  export() { exportCSV(); return false; },
+  importPick() { $("#importFile")?.click(); return false; },
+};
+
+function fieldsPick(el) { pickPlace(el.dataset.field, el.dataset.value, el.dataset.append === "1"); document.querySelectorAll("details.menu[open]").forEach((d) => d.removeAttribute("open")); }
+
+function exportCSV() {
   try {
-    if (layoutNow() !== "desktop" && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: "OTS Munkajelentő – bejegyzések" });
-    } else {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(file); a.download = "bejegyzesek.csv";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }
-    store.markExported();
-    say("Az exportálás kész.");
-  } catch (e) {
-    if (e && e.name === "AbortError") return;   // a felhasználó megszakította a megosztást
-    say("Az exportálás nem sikerült: " + (e?.message || e), true);
-  }
+    const file = new File([encodeBytes(S.entries)], "bejegyzesek.csv", { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(file); a.download = "bejegyzesek.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    store.markExported(); ctx.say("Az exportálás kész."); 
+  } catch (e) { ctx.say("Az exportálás nem sikerült: " + (e?.message || e), true); }
   render();
 }
 
@@ -271,96 +193,50 @@ async function importFile(file) {
   try {
     const { entries, warnings } = decode(await file.text());
     const r = store.importEntries(entries);
-    say(`Importálva: ${r.added} új bejegyzés, ${r.skipped} már megvolt.${warnings.length ? ` Figyelmeztetés: ${warnings.slice(0, 3).join("; ")}${warnings.length > 3 ? " …" : ""}` : ""}`, warnings.length > 0, 9000);
-  } catch (e) {
-    say("Az importálás nem sikerült: " + (e?.message || e), true, 9000);
-  }
+    ctx.say(`Importálva: ${r.added} új bejegyzés, ${r.skipped} már megvolt.${warnings.length ? ` Figyelmeztetés: ${warnings.slice(0, 3).join("; ")}${warnings.length > 3 ? " …" : ""}` : ""}`, warnings.length > 0, 9000);
+  } catch (e) { ctx.say("Az importálás nem sikerült: " + (e?.message || e), true, 9000); }
   render();
 }
 
-function onClick(ev) {
+async function onClick(ev) {
+  document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(ev.target)) d.removeAttribute("open"); });
   const el = ev.target.closest("[data-action]");
-  if (!el) return;
-  const a = el.dataset.action, d = el.dataset;
-  const draft = S.draft;
+  if (!el || el.disabled) return;
+  const a = el.dataset.action, fn = actions[a];
+  if (!fn) return;
   if (a !== "delete") ui.confirmDelete = null;
-  if (a !== "reset") ui.confirmReset = false;
-  switch (a) {
-    case "tab": ui.tab = d.tab; if (d.tab === "days") ui.day = todayYMD(); ui.msg = null; break;
-    case "pick": {
-      const t = d.target;
-      if (t === "workplace" && isTravel(draftType(draft))) {
-        const l = workplaceList(draft.workplace);
-        if (!l.some((x) => x.toLowerCase() === d.value.toLowerCase())) l.push(d.value);
-        draft.workplace = l.join(", ");
-      } else draft[t] = d.value;
-      store.saveDraft(); break;
-    }
-    case "qty": draft.quantity = Math.min(99, Math.max(1, draft.quantity + Number(d.d))); store.saveDraft(); break;
-    case "timerStart":
-      if (!store.startTimer()) say("Töltsd ki a kötelező mezőket.", true);
-      break;
-    case "timerStop": {
-      const e = store.stopTimer();
-      say(e ? `Mentve: ${e.typeLabel}, ${formatHM(e.durationSeconds)}.` : "Töltsd ki a kötelező mezőket a mentéshez.", !e);
-      break;
-    }
-    case "timerDiscard": if (confirm("Elveted a futó időmérést?")) store.discardTimer(); break;
-    case "mode": ui.manual.mode = d.mode; break;
-    case "step": {
-      const m = ui.manual;
-      m.hours = Math.min(16, Math.max(0, m.hours + (d.field === "hours" ? Number(d.d) : 0)));
-      if (d.field === "minutes") m.minutes = Math.min(55, Math.max(0, m.minutes + Number(d.d)));
-      break;
-    }
-    case "manualSave": {
-      const m = ui.manual;
-      const r = manualEntry(draft, { day: m.day, mode: m.mode, from: m.from, to: m.to, hours: m.hours, minutes: m.minutes });
-      if (!r.ok) { say(r.error, true); break; }
-      store.addEntry(r.entry); store.resetDraft();
-      say(`Rögzítve: ${r.entry.typeLabel} (${r.entry.date}).`);
-      break;
-    }
-    case "dayPrev": ui.day = addDays(ui.day, -1); break;
-    case "dayNext": if (ui.day < todayYMD()) ui.day = addDays(ui.day, 1); break;
-    case "dayToday": ui.day = todayYMD(); break;
-    case "dayGo": ui.day = d.day; break;
-    case "delete":
-      if (ui.confirmDelete === d.id) { store.deleteEntry(d.id); ui.confirmDelete = null; } else ui.confirmDelete = d.id;
-      break;
-    case "placeRemove": store.setPlaces(S.places.filter((p) => p !== d.value)); break;
-    case "placeAdd": { const i = $("#newPlace"); if (i && i.value.trim()) store.setPlaces([...S.places, i.value]); break; }
-    case "reload": location.reload(); return;
-    case "layout": store.saveSettings({ layout: toggledLayout(layoutNow()) }); break;
-    case "export": exportCSV(); return;
-    case "importPick": $("#importFile")?.click(); return;
-    case "reset":
-      if (ui.confirmReset) { store.resetAll(); ui.confirmReset = false; ui.tab = "timer"; say("Minden adat törölve."); } else ui.confirmReset = true;
-      break;
-    default: return;
-  }
-  render();
+  if (a.startsWith("reset") === false && ui.confirmReset && !["resetAsk", "resetAsk2", "resetCancel", "resetDo", "resetToggle"].includes(a)) { ui.confirmReset = 0; }
+  const r = await fn(el, ev);
+  if (r !== false) render();
 }
 
 function onInput(ev) {
-  const el = ev.target;
-  const ns = el.dataset?.ns, f = el.dataset?.field;
-  if (!ns || !f) return;
+  const el = ev.target, ns = el.dataset?.ns, f = el.dataset?.field, isChange = ev.type === "change";
+  if (!ns) return;
   const value = el.type === "checkbox" ? el.checked : el.value;
-  if (ns === "draft") {
-    S.draft[f] = value;
-    store.saveDraft();
-    if (ev.type === "change" && (f === "typeCode" || f === "roundTrip")) render();
-    else refreshGate();
-  } else if (ns === "manual") {
-    ui.manual[f] = value;
-    if (ev.type === "change" && f === "day") {
-      if (!parseYMD(value) || value > todayYMD()) { ui.manual.day = todayYMD(); say("Jövőbeli napra nem lehet bejegyzést felvenni.", true); }
-      render();
-    }
-  } else if (ns === "settings" && ev.type === "change") {
-    store.saveSettings({ [f]: value });
-    render();
+  switch (ns) {
+    case "draft":
+      if (f === "typeCode") { if (isChange) { store.setDraftType(value); render(); } return; }
+      S.draft[f] = value; store.saveDraft();
+      if (isChange && f === "roundTrip") render(); else capture.refreshGate();
+      return;
+    case "manual":
+      ui.manual[f] = value;
+      if (f === "day") {
+        if (isChange) {
+          if (!parseYMD(value) || value > todayYMD()) { ui.day = todayYMD(); ctx.say("Jövőbeli napra nem lehet bejegyzést felvenni.", true); } else ui.day = value;
+          render();
+        }
+      } else capture.refreshGate();
+      return;
+    case "pomo": if (isChange) { store.saveSettings({ pomo: { ...S.settings.pomo, [f]: value } }); render(); } return;
+    case "set": if (isChange) { settings.onSettingChange(el); render(); } return;
+    case "ui": ui[f] = value; return;
+    case "cat": if (isChange) { if (!store.renameCategory(el.dataset.code, value)) ctx.say("A kategória neve nem lehet üres.", true); render(); } return;
+    case "hide": if (isChange) { store.setBuiltinHidden(el.dataset.code, !el.checked); render(); } return;
+    case "att": if (!isChange) lower.attInput(el); return;
+    case "skill": if (ui.skill) ui.skill[f] = value; return;
+    default:
   }
 }
 
@@ -370,29 +246,71 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "importFile" && ev.target.files?.[0]) { importFile(ev.target.files[0]); ev.target.value = ""; return; }
   onInput(ev);
 });
-// Asztali nézetben az Enter a Start/Rögzítés gombot nyomja meg (ha a kötelező mezők ki vannak töltve).
 document.addEventListener("keydown", (ev) => {
-  if (ev.key !== "Enter" || layoutNow() !== "desktop") return;
+  if (ev.key === "Escape" && ui.modal) { ui.modal = null; ui.skill = null; render(); return; }
+  if (ev.key !== "Enter") return;
   const t = ev.target;
-  if (!(t instanceof HTMLInputElement) || t.dataset.ns !== "draft" || t.type === "checkbox") return;
-  const btn = $("#gateBtn");
-  if (btn && !btn.disabled) { ev.preventDefault(); btn.click(); }
+  if (!(t instanceof HTMLInputElement) || t.type === "checkbox") return;
+  if (t.dataset.ns === "draft" || t.dataset.ns === "manual") {
+    const btn = $("#gateBtn");
+    if (btn && !btn.disabled) { ev.preventDefault(); btn.click(); }
+  } else if (t.id === "newPlace") { ev.preventDefault(); actions.placeAdd(); render(); }
+  else if (t.id === "newCong") { ev.preventDefault(); actions.congAdd(); render(); }
+  else if (t.id === "newCat") { ev.preventDefault(); actions.catAdd(); render(); }
+  else if (t.id === "hexIn" && ui.colorOpen) { ev.preventDefault(); actions.colorHex({ dataset: { code: ui.colorOpen } }); render(); }
 });
-let resizeHandle = null;
-window.addEventListener("resize", () => {
-  clearTimeout(resizeHandle);
-  resizeHandle = setTimeout(() => { if (S.settings.layout === "auto" && layoutNow() !== lastLayout && !(document.activeElement instanceof HTMLInputElement)) render(); }, 150);
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); render(); }
-});
+cal.initCalendarPointer();
 
-// Tartós tárhely kérése (csökkenti az esélyét, hogy a böngésző törölje az adatokat).
+// ---------- Másodpercenkénti léptetés (a háttérben is pontos, Web Workerből) ----------
+
+let lastDay = todayYMD();
+function onTick() {
+  const now = Date.now();
+  const r = store.tickPomo(now);
+  if (r) {
+    if (r.notify) {
+      const snd = S.settings[r.notify.sound === "pomoEnd" ? "soundPomoEnd" : "soundBreakEnd"];
+      if (snd && snd !== NO_SOUND) playSound(snd);
+      if (S.settings.notifications) notify(r.notify.title, r.notify.body);
+    }
+    render();
+    return;
+  }
+  const day = todayYMD();
+  if (day !== lastDay) { if (ui.day === lastDay) ui.day = day; lastDay = day; render(); return; }
+  capture.tickDOM();
+}
+try {
+  const url = URL.createObjectURL(new Blob(["setInterval(()=>postMessage(0),1000)"], { type: "text/javascript" }));
+  const w = new Worker(url);
+  w.onmessage = onTick;
+} catch { setInterval(onTick, 1000); }
+
+// ---------- Mentés, újraolvasás, frissítés ----------
+
+async function refreshFromFolder() {
+  try { if (await store.reloadIfChanged()) render(); } catch { /* nem baj */ }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); refreshFromFolder(); render(); }
+  else store.flush();
+});
+window.addEventListener("focus", refreshFromFolder);
+window.addEventListener("pagehide", () => { store.flush(); });
+
 navigator.storage?.persist?.().catch(() => {});
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  const hadController = !!navigator.serviceWorker.controller;
+  const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("./sw.js").catch(() => {});
-  // Ha új változat vált aktívvá, jelezzük (a futó időzítő és az űrlap tartalma ilyenkor sem vész el, mert tárolva van).
-  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) { ui.update = true; render(); } });
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (had) { ui.update = true; render(); } });
 }
+// Telepített (saját ablakos) használatnál első indításkor a natív app méretére állítja az ablakot.
+try {
+  if (window.matchMedia("(display-mode: standalone)").matches && !localStorage.getItem("ots.sized")) {
+    window.resizeTo(520, Math.min(screen.availHeight, 900)); localStorage.setItem("ots.sized", "1");
+  }
+} catch { /* nem baj */ }
+
+if (location.hostname === "localhost") window.__ots = { store, ui, render };   // csak helyi fejlesztéshez
 render();
+store.startSync().then(() => render()).catch(() => render());

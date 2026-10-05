@@ -94,3 +94,83 @@ export function formatClock(seconds) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
+
+// ---------- Hét, hónap, negyedév (a natív app DateUtil/AttendanceSchedule megfelelői) ----------
+
+/** A hét első napja (1 = vasárnap, 2 = hétfő, mint a natív appban) a nap hetére. */
+export function startOfWeek(s, firstWeekday = 2) {
+  if (!parseYMD(s)) return s;
+  const first = firstWeekday === 1 ? 0 : 1;           // 0 = vasárnap, 1 = hétfő (JS-számozás)
+  const back = (weekday(s) - first + 7) % 7;
+  return addDays(s, -back);
+}
+
+/** A következő/előző hónap (év, hó) párja; érvénytelen bemenetre változatlan. */
+export function shiftMonth(y, m, delta) {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return { y, m };
+  const idx = y * 12 + (m - 1) + delta;
+  return { y: Math.floor(idx / 12), m: (idx % 12) + 1 };
+}
+
+/** (év, negyedév 1–4) a naphoz; érvénytelen napra null. */
+export function quarterOf(s) {
+  const p = parseYMD(s);
+  return p ? { y: p.y, q: Math.floor((p.m - 1) / 3) + 1 } : null;
+}
+
+/** A negyedév összes szombatja időrendben. */
+export function saturdays(y, q) {
+  if (!Number.isInteger(y) || !Number.isInteger(q) || q < 1 || q > 4) return [];
+  const out = [];
+  for (let m = (q - 1) * 3 + 1; m <= q * 3; m++) {
+    for (const d of monthDays(y, m)) if (isSaturday(d)) out.push(d);
+  }
+  return out;
+}
+
+/** A gyülekezeti létszámjelentő esedékes napjai: minden negyedév második és hetedik szombatja. */
+export const DUE_ORDINALS = [2, 7];
+export function dueDatesOfQuarter(y, q) {
+  const sats = saturdays(y, q);
+  return DUE_ORDINALS.filter((n) => n <= sats.length).map((n) => sats[n - 1]);
+}
+
+/** Az [from, to] zárt tartományba eső esedékes napok, időrendben. */
+export function dueDatesBetween(from, to) {
+  const a = quarterOf(from), b = quarterOf(to);
+  if (!a || !b || from > to) return [];
+  const out = [];
+  let y = a.y, q = a.q, guard = 0;
+  while ((y < b.y || (y === b.y && q <= b.q)) && guard++ < 400) {
+    for (const d of dueDatesOfQuarter(y, q)) if (d >= from && d <= to) out.push(d);
+    q += 1;
+    if (q > 4) { q = 1; y += 1; }
+  }
+  return out;
+}
+
+export function isDueDay(s) {
+  const qt = quarterOf(s);
+  return !!qt && dueDatesOfQuarter(qt.y, qt.q).includes(s);
+}
+
+/** Hónap neve és évszáma: „2026. október”. */
+const HU_MONTH = new Intl.DateTimeFormat("hu-HU", { year: "numeric", month: "long" });
+export const formatMonth = (y, m) => { const d = fromYMD(ymd(y, m, 1)); return d ? HU_MONTH.format(d) : `${y}. ${m}.`; };
+
+const HU_DAYNAME = new Intl.DateTimeFormat("hu-HU", { weekday: "short" });
+const HU_CHIP = new Intl.DateTimeFormat("hu-HU", { month: "short", day: "numeric", weekday: "short" });
+const HU_DAYNUM = new Intl.DateTimeFormat("hu-HU", { day: "numeric", weekday: "short" });
+export const dayName = (s) => { const d = fromYMD(s); return d ? HU_DAYNAME.format(d).replace(".", "") : ""; };
+export const formatChip = (s) => { const d = fromYMD(s); return d ? HU_CHIP.format(d) : String(s); };
+export const formatDayNum = (s) => { const d = fromYMD(s); return d ? HU_DAYNUM.format(d) : String(s); };
+export const dayOfMonth = (s) => parseYMD(s)?.d ?? 0;
+
+/** Hány perc telt el éjféltől a `HH:mm[:ss]` időponttól; érvénytelenre null. */
+export function minutesOfDay(t) {
+  const secs = parseTime(t);
+  return secs == null ? null : Math.floor(secs / 60);
+}
+
+/** Perc éjféltől -> `HH:mm`. */
+export const hmFromMinutes = (min) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;

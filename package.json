@@ -1,9 +1,9 @@
 {
   "name": "ots-munkajelento-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "OTS Munkajelentő Tracker – mobilos webalkalmazás (helyben tároló)",
+  "description": "OTS Munkajelentő Tracker – asztali (Windows) webalkalmazás",
   "scripts": {
     "test": "node --test test/",
     "start": "python3 -m http.server 8080"

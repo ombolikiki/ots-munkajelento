@@ -9,6 +9,22 @@ export const emptyDraft = () => ({
 
 export const draftType = (d) => lookupByCode(d.typeCode);
 
+/** Típusváltás az űrlapon (a natív app szabályai): mennyiség nélküli típusnál 1; Utazásnál az üres Indulás/Érkezés a székhely. */
+export function applyType(d, code, home = "") {
+  const next = { ...d, typeCode: code };
+  const type = lookupByCode(code);
+  if (!hasQuantity(type)) next.quantity = 1;
+  if (isTravel(type)) {
+    const h = String(home ?? "").trim();
+    if (!next.departure) next.departure = h;
+    if (!next.arrival) next.arrival = h;
+  }
+  return next;
+}
+
+/** Az űrlap kiürítése rögzítés után (az oda-vissza jelölő megmarad, mint a natív appban). */
+export const clearedDraft = (d) => ({ ...emptyDraft(), roundTrip: !!d.roundTrip });
+
 /** Munkahely(ek) szövege -> tiszta lista. */
 export const workplaceList = (text) =>
   String(text ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -32,7 +48,7 @@ export function missingHint(d) {
 /** Az indító (Időzítő) vagy mentő (Bevitel) gomb tiltása és a figyelmeztetés szövege az űrlap állapotából. */
 export function gate(tab, d) {
   const type = draftType(d);
-  if (tab === "timer" && type && isWholeDay(type)) return { disabled: true, text: "Egész napos típushoz használd a Bevitel lapot." };
+  if (tab === "timer" && type && isWholeDay(type)) return { disabled: true, text: "Ez a típus csak a Kézi bevitelnél használható." };
   const hint = missingHint(d);
   return { disabled: !!hint, text: hint || "" };
 }
@@ -77,7 +93,7 @@ export function timedEntry(d, startMs, endMs, source = "timer") {
 
 /**
  * Kézi bevitel ellenőrzése és létrehozása.
- * opts: {day, mode: "range"|"duration", from: "HH:mm", to: "HH:mm", hours, minutes, now}
+ * opts: {day, mode: "range"|"duration", from: "HH:mm", to: "HH:mm", hours, minutes, now, existing: a már rögzített bejegyzések}
  * Visszatér: {ok:true, entry} vagy {ok:false, error}
  */
 export function manualEntry(d, opts) {
@@ -87,7 +103,10 @@ export function manualEntry(d, opts) {
   if (!parseYMD(opts.day)) return { ok: false, error: "Érvénytelen nap." };
   if (opts.day > todayYMD(now)) return { ok: false, error: "Jövőbeli napra nem lehet bejegyzést felvenni." };
   const type = draftType(d);
-  if (isWholeDay(type)) return { ok: true, entry: wholeDayEntry(d, opts.day) };
+  if (isWholeDay(type)) {
+    if ((opts.existing ?? []).some((x) => x.date === opts.day && x.type === type.code)) return { ok: false, error: "Erre a napra már van ilyen bejegyzés." };
+    return { ok: true, entry: wholeDayEntry(d, opts.day) };
+  }
   const e = base(d, type, "manual");
   e.date = opts.day;
   if (type.unit !== UNIT.HOURS) return { ok: true, entry: e };   // alkalom, fő: csak mennyiség
@@ -108,6 +127,30 @@ export function manualEntry(d, opts) {
   const secs = Math.max(0, Math.trunc(opts.hours || 0)) * 3600 + Math.max(0, Math.trunc(opts.minutes || 0)) * 60;
   if (secs <= 0) return { ok: false, error: "Az időtartam legyen legalább 1 perc." };
   e.durationSeconds = Math.min(secs, 24 * 3600);
+  return { ok: true, entry: e };
+}
+
+/**
+ * A Naptárban húzással kijelölt idősáv rögzítése (forrás: calendar). Ellenőrzi a jövőt és az egész napos duplikátumot.
+ * Visszatér: {ok:true, entry} vagy {ok:false, error}
+ */
+export function slotEntry(d, day, startMin, endMin, now = new Date(), existing = []) {
+  const hint = missingHint(d);
+  if (hint) return { ok: false, error: hint };
+  if (!parseYMD(day)) return { ok: false, error: "Érvénytelen nap." };
+  if (day > todayYMD(now)) return { ok: false, error: "Jövőbeli napra nem lehet bejegyzést felvenni." };
+  const type = draftType(d);
+  if (isWholeDay(type)) {
+    if (existing.some((x) => x.date === day && x.type === type.code)) return { ok: false, error: "Erre a napra már van ilyen bejegyzés." };
+    return { ok: true, entry: wholeDayEntry(d, day) };
+  }
+  if (day === todayYMD(now) && endMin * 60 > now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) {
+    return { ok: false, error: "Jövőbeli időpontra nem lehet bejegyzést felvenni." };
+  }
+  const c = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}:00`;
+  const e = base(d, type, "calendar");
+  e.date = day; e.start = c(startMin); e.end = c(endMin);
+  e.durationSeconds = Math.max(0, (endMin - startMin) * 60);
   return { ok: true, entry: e };
 }
 
