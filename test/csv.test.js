@@ -2,17 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as C from "../src/csv.js";
 
-const HEADER = "Azonosító;Dátum;Kezdés;Vége;Időtartam (mp);Időtartam (óó:pp);Indulás;Munkahely;Érkezés;Típus kód;Típus;Egység;Mennyiség;Tevékenység;Forrás";
+const HEADER = "Azonosító;Dátum;Kezdés;Vége;Időtartam (mp);Időtartam (óó:pp);Indulás;Munkahely;Érkezés;Típus kód;Típus;Egység;Mennyiség;Tevékenység;Forrás;Cím;Naptár azonosító";
 
 const sample = [
   { id: "11111111-1111-4111-8111-111111111111", date: "2026-10-05", start: "09:00:00", end: "10:30:00", durationSeconds: 5400,
-    workplace: "Győr", type: "MEETING", typeLabel: "Értekezlet", unit: "ora", quantity: null, activity: "Heti; megbeszélés \"X\"", source: "timer", departure: null, arrival: null },
+    workplace: "Győr", type: "MEETING", typeLabel: "Értekezlet", unit: "ora", quantity: null, activity: "Heti; megbeszélés \"X\"", source: "timer", departure: null, arrival: null, address: null, calendarID: null },
   { id: "22222222-2222-4222-8222-222222222222", date: "2026-10-05", start: null, end: null, durationSeconds: 0,
-    workplace: "Mór", type: "VISITING", typeLabel: "Látogatás (gyülekezet)", unit: "fo", quantity: 3, activity: "", source: "manual", departure: null, arrival: null },
+    workplace: "Mór", type: "VISITING", typeLabel: "Látogatás (gyülekezet)", unit: "fo", quantity: 3, activity: "", source: "manual", departure: null, arrival: null, address: null, calendarID: null },
   { id: "33333333-3333-4333-8333-333333333333", date: "2026-10-06", start: "07:30:00", end: "08:15:00", durationSeconds: 2700,
-    workplace: "Tata, Mór", type: "TRAVEL", typeLabel: "Utazás", unit: "ora", quantity: null, activity: "Kiszállás\nKét sor", source: "manual", departure: "Győr", arrival: "Győr" },
+    workplace: "Tata, Mór", type: "TRAVEL", typeLabel: "Utazás", unit: "ora", quantity: null, activity: "Kiszállás\nKét sor", source: "manual", departure: "Győr", arrival: "Győr", address: null, calendarID: null },
   { id: "44444444-4444-4444-8444-444444444444", date: "2026-10-07", start: null, end: null, durationSeconds: 0,
-    workplace: "SZABADSÁG", type: "HOLIDAY", typeLabel: "Szabadság", unit: "egesz_nap", quantity: null, activity: "", source: "manual", departure: null, arrival: null },
+    workplace: "SZABADSÁG", type: "HOLIDAY", typeLabel: "Szabadság", unit: "egesz_nap", quantity: null, activity: "", source: "manual", departure: null, arrival: null, address: null, calendarID: null },
 ];
 
 test("a fejléc bájtra azonos a Mac-alkalmazáséval", () => {
@@ -111,4 +111,35 @@ test("a szám-olvasó védett", () => {
 test("az ismétlődő és a hiányos azonosító új azonosítót kap", () => {
   const { entries } = C.decode("Azonosító;Dátum;Munkahely;Típus kód\nnem-uuid;2026-10-05;Győr;MEETING\n");
   assert.match(entries[0].id, /^[0-9a-f-]{36}$/);
+});
+
+test("a régi (Cím és Naptár azonosító nélküli) fájl olvasható, az új oszlopok üresek", () => {
+  const old = "Azonosító;Dátum;Kezdés;Vége;Időtartam (mp);Időtartam (óó:pp);Indulás;Munkahely;Érkezés;Típus kód;Típus;Egység;Mennyiség;Tevékenység;Forrás\r\n" +
+    "11111111-1111-4111-8111-111111111111;2026-10-01;09:00:00;10:00:00;3600;1:00;;Győr;;MEETING;Értekezlet;ora;;x;manual\r\n";
+  const r = C.decode(old);
+  assert.equal(r.warnings.length, 0); assert.equal(r.entries.length, 1);
+  assert.equal(r.entries[0].address, null); assert.equal(r.entries[0].calendarID, null);
+});
+
+test("naptári bejegyzés: Cím és Naptár azonosító oda-vissza, az oszlopok a végén, fejléc szerint azonosítva", () => {
+  const e = { id: "55555555-5555-4555-8555-555555555555", date: "2026-10-01", start: "09:00:00", end: "10:00:00", durationSeconds: 3600, workplace: "Győr", type: "MEETING", typeLabel: "Értekezlet", unit: "ora",
+    quantity: null, activity: "x; y", source: "calendar", departure: null, arrival: null, address: "Fő utca 3., Győr - Mór u. 5., Mór", calendarID: "ABC|1790000000#2026-10-01" };
+  const text = C.encodeText([e]);
+  const row = text.split("\r\n")[1];
+  assert.ok(row.endsWith(';calendar;"Fő utca 3., Győr - Mór u. 5., Mór";ABC|1790000000#2026-10-01') || row.includes(";calendar;Fő utca"), row);
+  assert.deepEqual(C.decode(text).entries[0], e);
+  // az oszlopsorrend megváltozása sem zavar (fejléc alapján olvas)
+  const swapped = "Naptár azonosító;Cím;Azonosító;Dátum;Típus kód\r\nZ#2026-10-02;;66666666-6666-4666-8666-666666666666;2026-10-02;MEETING\r\n";
+  assert.equal(C.decode(swapped).entries[0].calendarID, "Z#2026-10-02");
+  assert.deepEqual(C.COLUMNS.slice(-2), ["Cím", "Naptár azonosító"]); assert.equal(C.COLUMNS.length, 17);
+});
+
+test("éjfélen átnyúló bejegyzések: a nap végi vég „00:00:00”, a 24 órás nap is megmarad", () => {
+  const mk = (o) => ({ id: "77777777-7777-4777-8777-777777777777", type: "MEETING", typeLabel: "Értekezlet", unit: "ora", quantity: null, workplace: "Győr", activity: "", source: "calendar", departure: null, arrival: null, address: null, calendarID: null, ...o });
+  const a = mk({ date: "2026-10-01", start: "22:00:00", end: "00:00:00", durationSeconds: 7200 });
+  const b = mk({ date: "2026-10-02", start: "00:00:00", end: "02:00:00", durationSeconds: 7200 });
+  const full = mk({ date: "2026-10-02", start: "00:00:00", end: "00:00:00", durationSeconds: 86400 });
+  const back = C.decode(C.encodeText([a, b, full])).entries;
+  assert.deepEqual(back.map((x) => x.durationSeconds), [7200, 7200, 86400]);
+  assert.deepEqual(back.map((x) => x.date), ["2026-10-01", "2026-10-02", "2026-10-02"]);
 });

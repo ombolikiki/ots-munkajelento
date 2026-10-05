@@ -22,6 +22,13 @@ Telepíthető webalkalmazás (PWA) **Windowsra (Chrome vagy Edge)**, a Mac-alkal
 - **A Chrome nem enged** rendszermappát (AppData, Library) és a felhasználói mappát magát kijelölni: válassz almappát.
 - A skill a mappa **teljes elérési útját** a `beallitasok.json`-ból tudja; a böngésző ezt nem látja, ezért a Beállításokban kézzel kell megadni (a mappa Ctrl+Shift+C másolt útvonala).
 
+## Naptár-értelmező és szinkron (a naptárintegráció logikája)
+A `docs/NAPTAR_JELOLESEK.md` (közös, végleges előírás) szerint, a Mac-alkalmazás `CalendarParser`/`CalendarSync` logikájával egyezően:
+- `src/calendarParser.js`: a cím, a helyszín és az idő értelmezése (típusnevek, `@Település`, `×n`, Utazás-útvonalak, pontos címek ` - ` elválasztóval, egész napos és éjfélen átnyúló események, kihagyás).
+- `src/calendarSync.js`: a szinkron terve és végrehajtása. A naptár a mérvadó (módosítás frissít, törlés/lemondás töröl), a kézi bejegyzéshez és az ablaknál (alapból 60 nap) régebbi bejegyzéshez nem nyúl; a törlés előtt másolat készül (`bejegyzesek.naptar-elotti.csv`); védelem: ha a törlések száma > 5 és az ablakbeli naptáras bejegyzések fele, vagy a naptár üresnek látszik, megerősítést kér.
+- **CSV:** a 15 oszlop változatlan, a végére két új oszlop került: `Cím` (a pontos címek ` - `-vel), `Naptár azonosító` (`<azonosító>#ÉÉÉÉ-HH-NN`, ismétlődő példánynál `<azonosító>|<másodperc>#ÉÉÉÉ-HH-NN`). A `Forrás` a naptárból átvettnél `calendar`. A régi fájlok olvashatók maradnak. Az éjfélen átnyúló esemény két bejegyzés (a nap végi vég `00:00:00`).
+- Állapot: a logika és a CSV kész és tesztelt; **a Google/Outlook naptár-lekérdezés (OAuth) és a hozzá tartozó felület még nincs bekötve** (a regisztrációkhoz a te Google Cloud és Microsoft Entra azonosítóid kellenek, lásd `TERV.md`).
+
 ## Tesztek és fejlesztés
 ```bash
 cd web && node --test test/*.test.js

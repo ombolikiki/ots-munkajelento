@@ -6,6 +6,7 @@ export const COLUMNS = [
   "Azonosító", "Dátum", "Kezdés", "Vége", "Időtartam (mp)", "Időtartam (óó:pp)",
   "Indulás", "Munkahely", "Érkezés",
   "Típus kód", "Típus", "Egység", "Mennyiség", "Tevékenység", "Forrás",
+  "Cím", "Naptár azonosító",   // a naptárintegrációhoz (docs/NAPTAR_JELOLESEK.md); a régi, ezek nélküli fájlok olvashatók maradnak
 ];
 
 export function quote(s) {
@@ -27,6 +28,7 @@ export function encodeText(entries) {
       e.type, e.typeLabel, e.unit,
       e.quantity == null ? "" : String(e.quantity),
       e.activity ?? "", e.source ?? "manual",
+      e.address ?? "", e.calendarID ?? "",
     ].map(quote).join(";"));
   }
   return lines.join("\r\n") + "\r\n";
@@ -109,7 +111,7 @@ export function decode(input) {
   if (iType == null && iTypeLabel == null) throw new Error("Hiányzik a „Típus kód” (vagy „Típus”) oszlop az adatfájlból.");
   const iId = idx("Azonosító"), iStart = idx("Kezdés"), iEnd = idx("Vége"), iSecs = idx("Időtartam (mp)");
   const iUnit = idx("Egység"), iDep = idx("Indulás"), iArr = idx("Érkezés"), iWork = idx("Munkahely");
-  const iQty = idx("Mennyiség"), iAct = idx("Tevékenység"), iSrc = idx("Forrás");
+  const iQty = idx("Mennyiség"), iAct = idx("Tevékenység"), iSrc = idx("Forrás"), iAddr = idx("Cím"), iCal = idx("Naptár azonosító");
 
   const entries = [], warnings = [];
   records.forEach((row, n) => {
@@ -130,7 +132,10 @@ export function decode(input) {
     if (st != null && en != null) { start = clock(st); end = clock(en); }
     let duration = 0;
     if (start != null && end != null) {
-      duration = en >= st ? en - st : en + 86400 - st;   // éjfélen átnyúló bejegyzés
+      if (en === st) {   // azonos kezdés és vég: nulla, vagy egy egész nap (0:00–0:00), amit az időtartam oszlop jelez
+        const d = number(cell(iSecs));
+        duration = d != null && d > 0 && d <= 86400 ? d : 0;
+      } else duration = en > st ? en - st : en + 86400 - st;   // éjfélen átnyúló bejegyzés (a nap végi vég „00:00:00”)
     } else {
       const d = number(cell(iSecs));
       if (d != null) duration = Math.max(0, d);
@@ -144,6 +149,7 @@ export function decode(input) {
       quantity: hasQuantity(type) ? Math.min(999, Math.max(1, qtyN ?? 1)) : null,
       activity: cell(iAct), source: cell(iSrc) || "manual",
       departure: cell(iDep) || null, arrival: cell(iArr) || null,
+      address: cell(iAddr) || null, calendarID: cell(iCal) || null,
     });
   });
   return { entries, warnings };

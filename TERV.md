@@ -1,6 +1,6 @@
 # Webalkalmazás – következő változat (Windows, Chrome)
 
-Állapot (2026-10-05): a **0.2** megvalósult: nincs mobil nézet, a felület a natív app méretű, szebb asztali panelje; a natív app összes funkciója (Pomodoro, Naptár, létszámjelentő, Kézi felvitel az OTS-be, kategóriák és színek, beállítások); **automatikus mentés az adatmappába** (`bejegyzesek.csv`, `letszamjelentesek.csv`, `beallitasok.json`); **skill-telepítő varázsló** (ZIP, parancsok, kiírás mappába). Lásd `web/README.md`. Hátra van: a naptárintegráció (1. feladat), a Windowson való éles kipróbálás és az ebből adódó javítások.
+Állapot (2026-10-05): a **0.2** megvalósult: nincs mobil nézet, a felület a natív app méretű, szebb asztali panelje; a natív app összes funkciója (Pomodoro, Naptár, létszámjelentő, Kézi felvitel az OTS-be, kategóriák és színek, beállítások); **automatikus mentés az adatmappába** (`bejegyzesek.csv`, `letszamjelentesek.csv`, `beallitasok.json`); **skill-telepítő varázsló** (ZIP, parancsok, kiírás mappába). Lásd `web/README.md`. Kész a végleges `NAPTAR_JELOLESEK.md` szerinti **naptár-értelmező, szinkron-terv és CSV** (`Cím`, `Naptár azonosító` oszlopok; `src/calendarParser.js`, `calendarSync.js`, tesztekkel). Hátra van: a Google/Outlook lekérdezés (OAuth) és a felület (1. feladat), a Windowson való éles kipróbálás és az ebből adódó javítások.
 Ez a fájl a következő változat döntéseit és feladatait gyűjti. A munkát az „OTS Webapp” beszélgetésben folytatjuk.
 
 ## Döntések (a felhasználótól, 2026-10-05)

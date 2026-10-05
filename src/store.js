@@ -31,12 +31,14 @@ export const DEFAULT_SETTINGS = {
   customCategories: [], hiddenTypes: [], categoryColors: {},
   otsRules: false, otsDataset: "work", otsView: "table",
   dataPath: "",
+  syncEnabled: false, syncCalendars: [], syncDays: 60, syncDismissed: [],
   skill: { userName: "", site: "det", home: "", congregations: "", tasks: [], targets: ["claude"], os: "" },
 };
 
 const int = (v, lo, hi, fb) => { const n = Math.trunc(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fb; };
 const oneOf = (v, list, fb) => (list.includes(v) ? v : fb);
 const str = (v) => (typeof v === "string" ? v.trim() : "");
+const strList = (v) => [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x))].sort();
 
 /** A beállítások érvényesítése: hibás vagy hiányzó érték helyére alapérték kerül (a tárolt adat sérült is lehet). */
 export function sanitizeSettings(raw) {
@@ -69,6 +71,7 @@ export function sanitizeSettings(raw) {
     customCategories: custom, hiddenTypes: hidden, categoryColors: colors,
     otsRules: !!r.otsRules, otsDataset: oneOf(r.otsDataset, OTS_DATASETS, d.otsDataset), otsView: oneOf(r.otsView, OTS_VIEWS, d.otsView),
     dataPath: str(r.dataPath),
+    syncEnabled: !!r.syncEnabled, syncCalendars: strList(r.syncCalendars), syncDays: int(r.syncDays, 1, 730, d.syncDays), syncDismissed: strList(r.syncDismissed),
     skill: {
       userName: str(sk.userName), site: oneOf(sk.site, SITES, "det"), home: str(sk.home), congregations: str(sk.congregations),
       tasks: (Array.isArray(sk.tasks) ? sk.tasks : []).filter((t) => SKILL_TASKS.includes(t)),
@@ -261,6 +264,26 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       write(KEYS.places, state.places); write(KEYS.entries, state.entries);
       scheduleFlush();
       return r;
+    },
+
+    /**
+     * Naptár-szinkron változásai egyben: add (új bejegyzések), update (azonos azonosítójú bejegyzések cseréje), remove (törlendő azonosítók).
+     * A módosítás előtt másolat készül az adatfájlról (`bejegyzesek.naptar-elotti.csv`, mindig felülírva).
+     */
+    async applyCalendarChanges({ add = [], update = [], remove = new Set() }) {
+      if (!add.length && !update.length && !remove.size) return { ok: true };
+      if (folder && folder.ready) {
+        try { await queue(async () => { if (await folder.exists(FILES.entries)) await folder.copy(FILES.entries, "bejegyzesek.naptar-elotti.csv"); }); }
+        catch (e) { return { ok: false, error: `A szinkron előtti másolat nem készült el, ezért nem módosítottam az adatokat: ${e?.message || e}` }; }
+      }
+      const upd = new Map(update.map((e) => [e.id, e]));
+      let list = state.entries.filter((e) => !remove.has(e.id)).map((e) => upd.get(e.id) || e);
+      for (const e of add) state.places = learnPlaces(state.places, e);
+      state.entries = sortEntries([...list, ...add]);
+      write(KEYS.places, state.places);
+      const ok = write(KEYS.entries, state.entries);
+      scheduleFlush();
+      return { ok, error: ok ? null : lastError };
     },
 
     // ---------- Helyszínek ----------
