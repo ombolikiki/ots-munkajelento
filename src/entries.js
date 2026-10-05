@@ -29,6 +29,14 @@ export function missingHint(d) {
   return d.workplace.trim() ? null : "A Munkahely mező kötelező.";
 }
 
+/** Az indító (Időzítő) vagy mentő (Bevitel) gomb tiltása és a figyelmeztetés szövege az űrlap állapotából. */
+export function gate(tab, d) {
+  const type = draftType(d);
+  if (tab === "timer" && type && isWholeDay(type)) return { disabled: true, text: "Egész napos típushoz használd a Bevitel lapot." };
+  const hint = missingHint(d);
+  return { disabled: !!hint, text: hint || "" };
+}
+
 /** Oda-vissza útnál az Érkezés az Indulás. */
 export const effectiveArrival = (d) => (d.roundTrip ? d.departure.trim() : d.arrival.trim());
 

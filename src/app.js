@@ -2,7 +2,7 @@
 import { groupedTypes, typeOfEntry, typeColor, isTravel, isWholeDay, hasQuantity, quantityUnit, UNIT } from "./types.js";
 import { todayYMD, addDays, formatLong, formatHM, formatClock, parseYMD } from "./dates.js";
 import { officialSeconds, targetState, missingDays, needsBackupReminder } from "./insights.js";
-import { missingHint, draftType, manualEntry, workplaceList } from "./entries.js";
+import { gate, draftType, manualEntry, workplaceList } from "./entries.js";
 import { encodeBytes, decode } from "./csv.js";
 import { createStore } from "./store.js";
 
@@ -15,7 +15,7 @@ const ui = {
   day: todayYMD(),
   manual: { day: todayYMD(), mode: "range", from: "", to: "", hours: 1, minutes: 0 },
   msg: null, msgErr: false,
-  confirmDelete: null, confirmReset: false,
+  confirmDelete: null, confirmReset: false, update: false,
 };
 let tickHandle = null, msgHandle = null;
 
@@ -107,8 +107,7 @@ function formHTML(locked) {
 
 function timerView() {
   const running = !!S.timer;
-  const type = draftType(S.draft), whole = isWholeDay(type);
-  const hint = missingHint(S.draft);
+  const g = gate("timer", S.draft);
   let h = formHTML(running);
   h += `<section class="card"><div class="clock" id="clock">${formatClock(running ? Math.floor((Date.now() - S.timer.startMs) / 1000) : 0)}</div>`;
   if (running) {
@@ -117,9 +116,8 @@ function timerView() {
       <button class="btn stop" data-action="timerStop">Leállítás és mentés</button>
       <p style="margin:8px 0 0"><button class="btn ghost small" data-action="timerDiscard">Elvetés</button></p>`;
   } else {
-    h += `<button class="btn go" data-action="timerStart" ${hint || whole ? "disabled" : ""}>Start</button>`;
-    if (whole) h += `<p class="hint">Egész napos típushoz használd a Bevitel lapot.</p>`;
-    else if (hint) h += `<p class="hint">${esc(hint)}</p>`;
+    h += `<button class="btn go" id="gateBtn" data-action="timerStart" ${g.disabled ? "disabled" : ""}>Start</button>
+      <p class="hint" id="gateHint" ${g.text ? "" : "hidden"}>${esc(g.text)}</p>`;
   }
   return h + `</section>`;
 }
@@ -127,7 +125,7 @@ function timerView() {
 function manualView() {
   const m = ui.manual, type = draftType(S.draft), whole = isWholeDay(type);
   const needsTime = type && type.unit === UNIT.HOURS;
-  const hint = missingHint(S.draft);
+  const g = gate("manual", S.draft);
   let h = formHTML(false);
   h += `<section class="card"><label class="f"><span>Nap</span>
       <input type="date" data-ns="manual" data-field="day" value="${esc(m.day)}" max="${todayYMD()}"></label>`;
@@ -144,8 +142,8 @@ function manualView() {
   } else if (type && !whole) {
     h += `<p class="small">Ennél a típusnál nem kell időtartam, csak a mennyiség.</p>`;
   }
-  h += `<button class="btn" data-action="manualSave" ${hint ? "disabled" : ""}>Rögzítés</button>`;
-  if (hint) h += `<p class="hint">${esc(hint)}</p>`;
+  h += `<button class="btn" id="gateBtn" data-action="manualSave" ${g.disabled ? "disabled" : ""}>Rögzítés</button>
+    <p class="hint" id="gateHint" ${g.text ? "" : "hidden"}>${esc(g.text)}</p>`;
   return h + `</section>`;
 }
 
@@ -207,6 +205,14 @@ function dataView() {
   return h + `<p class="small" style="text-align:center">OTS Munkajelentő (web) ${VERSION} · helyben tároló változat</p>`;
 }
 
+/** Beíráskor frissíti a Start/Rögzítés gombot és a figyelmeztetést az űrlap újrarajzolása nélkül (így a billentyűzet nyitva marad). */
+function refreshGate() {
+  const g = gate(ui.tab, S.draft);
+  const btn = $("#gateBtn"), hint = $("#gateHint");
+  if (btn) btn.disabled = g.disabled;
+  if (hint) { hint.textContent = g.text; hint.hidden = !g.text; }
+}
+
 // ---------- Megjelenítés ----------
 
 const TABS = [["timer", "⏱", "Időzítő"], ["manual", "✎", "Bevitel"], ["days", "📅", "Napok"], ["data", "⚙", "Adatok"]];
@@ -218,7 +224,8 @@ function render() {
   $("#head").innerHTML = `<h1>OTS Munkajelentő</h1><p>Ma: ${formatHM(officialSeconds(todayList))} óra · ${todayList.length} bejegyzés</p>`;
   $("#tabs").innerHTML = TABS.map(([k, ic, t]) => `<button data-action="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ""}><span class="ic">${ic}</span>${t}</button>`).join("");
   let body = ui.tab === "timer" ? timerView() : ui.tab === "manual" ? manualView() : ui.tab === "days" ? daysView() : dataView();
-  const banner = ui.msg ? `<div class="msg ${ui.msgErr ? "err" : ""}" role="status">${esc(ui.msg)}</div>` : store.error ? `<div class="msg err">${esc(store.error)}</div>` : "";
+  const updateBar = ui.update ? `<div class="msg">Új változat érhető el. <button class="chip acc" data-action="reload">Frissítés</button></div>` : "";
+  const banner = updateBar + (ui.msg ? `<div class="msg ${ui.msgErr ? "err" : ""}" role="status">${esc(ui.msg)}</div>` : store.error ? `<div class="msg err">${esc(store.error)}</div>` : "");
   $("#view").innerHTML = banner + body;
   if (ui.tab === "timer" && S.timer) {
     tickHandle = setInterval(() => {
@@ -314,6 +321,7 @@ function onClick(ev) {
       break;
     case "placeRemove": store.setPlaces(S.places.filter((p) => p !== d.value)); break;
     case "placeAdd": { const i = $("#newPlace"); if (i && i.value.trim()) store.setPlaces([...S.places, i.value]); break; }
+    case "reload": location.reload(); return;
     case "export": exportCSV(); return;
     case "importPick": $("#importFile")?.click(); return;
     case "reset":
@@ -333,6 +341,7 @@ function onInput(ev) {
     S.draft[f] = value;
     store.saveDraft();
     if (ev.type === "change" && (f === "typeCode" || f === "roundTrip")) render();
+    else refreshGate();
   } else if (ns === "manual") {
     ui.manual[f] = value;
     if (ev.type === "change" && f === "day") {
@@ -358,6 +367,9 @@ document.addEventListener("visibilitychange", () => {
 // Tartós tárhely kérése (csökkenti az esélyét, hogy a böngésző törölje az adatokat).
 navigator.storage?.persist?.().catch(() => {});
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("./sw.js").catch(() => {});
+  // Ha új változat vált aktívvá, jelezzük (a futó időzítő és az űrlap tartalma ilyenkor sem vész el, mert tárolva van).
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) { ui.update = true; render(); } });
 }
 render();

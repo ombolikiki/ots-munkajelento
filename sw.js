@@ -1,5 +1,5 @@
 // Offline működés: az alkalmazás fájljait gyorsítótárazza (az adatok a localStorage-ban vannak, nem itt).
-const CACHE = "ots-web-v1";
+const CACHE = "ots-web-v2";
 const FILES = [
   "./", "./index.html", "./style.css", "./manifest.webmanifest",
   "./src/app.js", "./src/csv.js", "./src/dates.js", "./src/entries.js", "./src/insights.js", "./src/store.js", "./src/types.js",

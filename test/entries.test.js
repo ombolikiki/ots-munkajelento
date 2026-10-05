@@ -81,3 +81,14 @@ test("egyesítés azonosító szerint", () => {
   assert.equal(r.added, 1); assert.equal(r.skipped, 1);
   assert.deepEqual(r.entries.map((x) => x.id), ["b", "a"]);
 });
+
+test("a Start/Rögzítés gomb állapota beíráskor változik", () => {
+  const d = draft({ typeCode: "MEETING" });
+  assert.deepEqual(E.gate("timer", d), { disabled: true, text: "A Munkahely mező kötelező." });
+  d.workplace = "Új település";                          // beírás után a gomb engedélyezett
+  assert.deepEqual(E.gate("timer", d), { disabled: false, text: "" });
+  assert.deepEqual(E.gate("manual", d), { disabled: false, text: "" });
+  assert.equal(E.gate("timer", draft({ typeCode: "HOLIDAY" })).disabled, true);   // egész napos: az Időzítőn nem
+  assert.equal(E.gate("manual", draft({ typeCode: "HOLIDAY" })).disabled, false);
+  assert.equal(E.gate("timer", draft()).disabled, true);
+});
