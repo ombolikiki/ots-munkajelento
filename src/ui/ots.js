@@ -109,7 +109,7 @@ function workTable() {
 
 // ---------- Költségelszámolás ----------
 
-const mapButtons = (r) => r.routes.map((route, i) => { const url = M.mapsURL(route);
+const mapButtons = (r) => (r.mapRoutes || r.routes).map((route, i) => { const url = M.mapsURL(route);
   return url ? `<a class="btn small ghost" href="${esc(url)}" target="_blank" rel="noopener" title="Megnyitja a Google Maps többpontos útvonalát a kilométer kiszámításához">${icon("map", 1)} ${r.routes.length > 1 ? "Térkép " + (i + 1) : "Google Maps"}</a>` : ""; }).join("");
 
 function costRows() { return M.costRows(ctx.S.entries, ui.ots.y, ui.ots.m, ctx.S.settings.home); }

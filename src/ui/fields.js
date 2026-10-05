@@ -26,12 +26,10 @@ export function fieldsHTML() {
   if (showWork) h += `<label class="f"><span>${travel ? "Munkahely(ek)" : "Munkahely"}</span>${placeField("workplace", d.workplace, travel ? "pl. Mohács, Szigetvár" : "Munkahely", { append: travel })}</label>`;
   h += `<label class="f"><span>Tevékenység típusa</span><select data-ns="draft" data-field="typeCode"><option value="">Válassz típust…</option>${typeOptions}</select></label></div>`;
   if (travel) {
-    h += `<div class="row2"><label class="f"><span>Indulás</span>${placeField("departure", d.departure, "Indulás")}</label>
+    h += `<div class="row2"><label class="f"><span>Indulás</span>${placeField("departure", d.departure, "Tata vagy Tata, Fő út 1.")}</label>
       <div class="f"><div class="f-head"><span>Érkezés</span>
-        <label class="check small"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""}> Oda-vissza</label></div>
-        ${d.roundTrip
-          ? `<div class="placefield"><input type="text" value="${esc(d.departure.trim() || "= Indulás")}" disabled></div>`
-          : placeField("arrival", d.arrival, "Érkezés")}</div></div>`;
+        <label class="check small" title="Oda-vissza út: az útvonal végére az Indulás is kerül (Indulás - Munkahely(ek) - Érkezés - Indulás)"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""}> Oda-vissza</label></div>
+        ${placeField("arrival", d.arrival, d.roundTrip ? "Érkezés (nem kötelező)" : "Tata vagy Tata, Fő út 1.")}</div></div>`;
   }
   if (type && hasQuantity(type)) {
     h += `<div class="stepline"><span class="mut">Mennyiség</span><div class="stepper">

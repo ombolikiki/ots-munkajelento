@@ -1,6 +1,7 @@
 // Bejegyzések létrehozása és az űrlap szabályai (tiszta függvények, tesztelhetők).
 import { UNIT, isTravel, isWholeDay, hasQuantity, lookupByCode } from "./types.js";
 import { uuid } from "./csv.js";
+import { parsePlace, fold } from "./calendarParser.js";
 import { toYMD, hhmmss, todayYMD, parseTime, parseYMD, pad } from "./dates.js";
 
 export const emptyDraft = () => ({
@@ -40,7 +41,8 @@ export function missingHint(d) {
     if (!workplaceList(d.workplace).length) miss.push("Munkahely(ek)");
     if (!d.roundTrip && !d.arrival.trim()) miss.push("Érkezés");
     if (!d.activity.trim()) miss.push("Tevékenység");
-    return miss.length ? "Kötelező mező: " + miss.join(", ") + "." : null;
+    if (miss.length) return "Kötelező mező: " + miss.join(", ") + ".";
+    return placeHint(d.departure, "Indulás") || placeHint(d.arrival, "Érkezés");
   }
   return d.workplace.trim() ? null : "A Munkahely mező kötelező.";
 }
@@ -53,19 +55,49 @@ export function gate(tab, d) {
   return { disabled: !!hint, text: hint || "" };
 }
 
-/** Oda-vissza útnál az Érkezés az Indulás. */
-export const effectiveArrival = (d) => (d.roundTrip ? d.departure.trim() : d.arrival.trim());
+/**
+ * Az Utazás összeállított útvonala a bejegyzéshez (a natív app TravelPlan megfelelője). Az Indulás és az Érkezés település vagy
+ * település és pontos cím („Tata” / „Tata, Fő út 1.”). Oda-vissza útnál az útvonal végére az Indulás kerül (az Érkezés a bejegyzésben az
+ * Indulás), a beírt Érkezés pedig utolsó Munkahelyként (kivéve, ha ugyanaz a település és nincs külön címe). Null, ha nem állapítható meg.
+ */
+export function travelPlan(d) {
+  const dep = parsePlace(d.departure);
+  if (!dep) return null;
+  const works = workplaceList(d.workplace);
+  let stopAddress = null, arr;
+  if (d.roundTrip) {
+    arr = dep;
+    const a = parsePlace(d.arrival);
+    if (a && (fold(a.settlement) !== fold(dep.settlement) || a.address)) {
+      if (!works.length || fold(works[works.length - 1]) !== fold(a.settlement)) works.push(a.settlement);
+      stopAddress = a.address;
+    }
+  } else {
+    arr = parsePlace(d.arrival);
+    if (!arr) return null;
+  }
+  return { departure: dep, arrival: arr, workplaces: works, stopAddress };
+}
+
+const placeHint = (raw, name) => {
+  const t = String(raw ?? "").trim();
+  return t && !parsePlace(t) ? `${name}: település, vagy település és cím vesszővel (például Tata, Fő út 1.).` : null;
+};
 
 /** Közös bejegyzés-mezők a piszkozatból. */
 function base(d, type, source) {
+  const plan = isTravel(type) ? travelPlan(d) : null;
   const entry = {
     id: uuid(), date: "", start: null, end: null, durationSeconds: 0,
-    workplace: isTravel(type) ? workplaceList(d.workplace).join(", ") : d.workplace.trim(),
+    workplace: isTravel(type) ? (plan ? plan.workplaces : workplaceList(d.workplace)).join(", ") : d.workplace.trim(),
     type: type.code, typeLabel: type.label, unit: type.unit,
     quantity: hasQuantity(type) ? Math.min(999, Math.max(1, Math.trunc(d.quantity) || 1)) : null,
     activity: d.activity.trim(), source,
-    departure: isTravel(type) ? d.departure.trim() : null,
-    arrival: isTravel(type) ? effectiveArrival(d) : null,
+    departure: plan ? plan.departure.settlement : isTravel(type) ? d.departure.trim() : null,
+    arrival: plan ? plan.arrival.settlement : isTravel(type) ? (d.arrival.trim() || d.departure.trim()) : null,
+    address: plan ? plan.stopAddress : null,
+    departureAddress: plan ? plan.departure.address : null,
+    arrivalAddress: plan ? plan.arrival.address : null,
   };
   return entry;
 }

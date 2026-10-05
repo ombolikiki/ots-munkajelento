@@ -94,6 +94,23 @@ export function place(raw) {
   return { settlement, address: parts.length >= 2 ? parts.join(", ") : null };
 }
 
+/**
+ * Egy beírt hely (az Utazás Indulás és Érkezés mezője): „Tata” vagy „Tata, Fő út 1.” (település elöl); a fordított „Fő út 1., Tata” és az
+ * irányítószám is érthető. Visszatér {settlement, address} (a cím utcával elöl, településsel a végén), vagy null, ha üres vagy a település
+ * nem állapítható meg.
+ */
+export function parsePlace(raw) {
+  const parts = String(raw ?? "").split(",").map(normalizeSpaces).filter(Boolean);
+  if (parts.length > 1 && COUNTRIES.has(fold(parts[parts.length - 1]))) parts.pop();
+  if (!parts.length) return null;
+  const first = stripPostalCode(parts[0]);
+  const noDigit = (s) => !!s && !Array.from(s).some(isDigit);
+  if (parts.length === 1) return noDigit(first) ? { settlement: first, address: null } : null;
+  if (noDigit(first)) return { settlement: first, address: parts.slice(1).join(", ") + ", " + first };
+  const p = place(parts.join(", "));   // fordított sorrend: utca elöl, település a végén
+  return p.settlement && p.address ? { settlement: p.settlement, address: p.address } : null;
+}
+
 // ---------- Cím (típus utáni rész) ----------
 
 const QTY_X = /(?<![\p{L}\p{N}])[×x]\s*(\d{1,3})(?![\p{L}\p{N}])/giu;

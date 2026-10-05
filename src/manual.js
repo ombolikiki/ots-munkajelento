@@ -3,6 +3,7 @@
 import { UNIT, lookupByCode, isCustomCode, isTravel } from "./types.js";
 import { monthDays, isSaturday, isSunday, parseYMD } from "./dates.js";
 import { dueDatesBetween } from "./dates.js";
+import { place, fold } from "./calendarParser.js";
 
 /** Az OTS Havi munkajelentő számoszlopai, a táblázat sorrendjében. */
 export const COLUMN_CODES = [
@@ -36,6 +37,30 @@ export function routePoints(e, home) {
     if (points.length && sameText(points[points.length - 1], t)) continue;
     points.push(t);
   }
+  return points;
+}
+
+/**
+ * Az útvonal pontjai pontos címekkel: a Munkahely(ek) pontjaihoz a bejegyzés `Cím` mezőjének azonos településű címei kerülnek (sorrendben,
+ * egy cím egyszer); az Indulás és az Érkezés pontját a saját `Indulás cím` és `Érkezés cím` mezője adja. Csak az azonos nevű, cím nélküli
+ * szomszédos pontok vonódnak össze. Visszatér [{name, address}].
+ */
+export function routeDetail(e, home) {
+  const dep = String(e.departure ?? "").trim(), arr = String(e.arrival ?? "").trim();
+  const pool = String(e.address ?? "").split(" - ").map((s) => s.trim()).filter(Boolean);
+  const points = [];
+  const add = (p) => {
+    if (!p.name) return;
+    const last = points[points.length - 1];
+    if (last && !last.address && !p.address && sameText(last.name, p.name)) return;
+    points.push(p);
+  };
+  add({ name: dep || home, address: dep ? e.departureAddress || null : null });
+  for (const m of splitList(e.workplace)) {
+    const i = pool.findIndex((a) => { const s = place(a).settlement; return s && fold(s) === fold(m); });
+    add({ name: m, address: i >= 0 ? pool.splice(i, 1)[0] : null });
+  }
+  add({ name: arr || home, address: arr ? e.arrivalAddress || null : null });
   return points;
 }
 
@@ -129,7 +154,8 @@ export function costRows(entries, y, m, home) {
     // A Tevékenység mezőt kizárólag az Utazás bejegyzések Tevékenysége adja (más kategóriából nem veszünk át szöveget).
     const texts = [];
     for (const e of travel) { const t = String(e.activity ?? "").trim(); if (t && !texts.includes(t)) texts.push(t); }
-    rows.push({ key: day, routes, activity: texts.join("; ") });
+    const mapRoutes = travel.filter((e) => routePoints(e, home).length).map((e) => routeDetail(e, home));
+    rows.push({ key: day, routes, mapRoutes, activity: texts.join("; ") });
   }
   return rows;
 }
@@ -138,7 +164,8 @@ export const costSignature = (r) => costRoute(r) + "|" + r.activity;
 
 /** Google Maps többpontos útvonal-hivatkozás (autós útvonal, a pontok sorrendjében); 2 pont alatt null. */
 export function mapsURL(points) {
-  const parts = points.map((p) => encodeURIComponent(String(p).trim())).filter(Boolean);
+  // a pont lehet szöveg (település) vagy {name, address}: a pontos cím az útvonalba kerül, ha van (a Maps maga keresi meg)
+  const parts = points.map((p) => encodeURIComponent(String(typeof p === "object" && p ? p.address || p.name : p).trim())).filter(Boolean);
   return parts.length >= 2 ? "https://www.google.com/maps/dir/" + parts.join("/") : null;
 }
 

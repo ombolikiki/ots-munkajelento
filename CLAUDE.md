@@ -4,7 +4,7 @@
 
 ## Kötelező szabályok
 1. **A dátumszámítás nem omolhat össze.** A napokat `ÉÉÉÉ-HH-NN` szövegként kezeljük, soha nem `new Date("ÉÉÉÉ-HH-NN")` (UTC-ként értelmeződne). Kezelni kell az évhatárt, a negyedévhatárt, a szökőnapot, a nyári időszámítást. Új dátum-alapú funkcióhoz teszt kell 2024–2035 között, minden negyedévre, **négy időzónában** futtatva: `for TZ in Europe/Budapest America/New_York Pacific/Auckland UTC; do TZ=$TZ node --test test/*.test.js; done`.
-2. **Szám- és CSV-olvasás sosem omolhat össze** hibás bemenettől (`inf`, `1e99`); a hibás sort kihagyja, és mentés előtt másolat készül a fájlról. A CSV-formátum bájtra azonos a Mac-alkalmazáséval (pontosvessző, UTF-8 BOM, CRLF, 17 oszlop; az utolsó kettő `Cím`, `Naptár azonosító`); nem módosítható eltérően.
+2. **Szám- és CSV-olvasás sosem omolhat össze** hibás bemenettől (`inf`, `1e99`); a hibás sort kihagyja, és mentés előtt másolat készül a fájlról. A CSV-formátum bájtra azonos a Mac-alkalmazáséval (pontosvessző, UTF-8 BOM, CRLF, 19 oszlop; az utolsó négy `Cím`, `Naptár azonosító`, `Indulás cím`, `Érkezés cím`); nem módosítható eltérően.
 3. **Függőség nélküli** sima JavaScript (ES modulok). Személyes adat, token vagy titok nem kerülhet a (nyilvános) tárba; a client ID nem titok, a kliens titok (secret) nem kell és nem is használunk.
 4. **A naptárba soha nem írunk** (csak olvasási jogosultság: Google `calendar.readonly`, Microsoft `Calendars.Read`).
 5. Az `sw.js` `CACHE` nevét minden közzétett változásnál emeld, az új fájlokat vedd fel a `FILES` listába (a README-ben is szerepel). A közzététel: `./scripts/publish.sh "üzenet"`; utána várd meg, hogy az éles `sw.js` az új verziót adja (ha a GitHub Pages építése elakad: `gh api -X POST repos/ombolikiki/ots-munkajelento/pages/builds`).
