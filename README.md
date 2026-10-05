@@ -2,6 +2,9 @@
 
 Telepíthető webalkalmazás (PWA) iPhone-ra és Androidra, az OTS Munkajelentő Tracker Mac-alkalmazás társa. **Az adatok csak a készüléken, a böngésző tárhelyén maradnak**, szerver nincs. A CSV-formátum bájtra azonos a Mac-alkalmazáséval, így a Macen beolvasható, és a skill használni tudja.
 
+## Nézetek: mobil és asztali (Windows)
+A fejlécben lévő **„🖥 Asztali nézet” / „📱 Mobil nézet”** gomb vált a két elrendezés között, és a választás megmarad. Az asztali nézetben felül van a fülsor, két oszlopban látszik az űrlap és az időmérő (illetve a napi lista és a kitöltetlen napok), az **Enter** a Start/Rögzítés gombot nyomja meg, és a CSV-exportálás közvetlenül letölt (a megosztás menü helyett). Az Adatok lap „Nézet” beállítása: *Automatikus* (alapérték: 1000 pontnál szélesebb ablakban asztali), *Mobil*, *Asztali*. Windowson Edge-ben vagy Chrome-ban a címsor jobb szélén lévő ikonnal telepíthető, saját ablakban fut.
+
 ## Mit tud (0.1)
 - **Időzítő:** típus, munkahely, tevékenység (Utazásnál kötelező, Indulás/Érkezés és Oda-vissza jelölő), Start/Stop. A kezdési időből számol, ezért az újratöltést és a háttérbe kerülést is túléli.
 - **Bevitel:** kézi felvitel tól–ig időponttal vagy óraszámmal, mennyiség (fő/alkalom), egész napos típusok. Jövőbeli nap és időpont nem rögzíthető.

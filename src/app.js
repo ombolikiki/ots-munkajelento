@@ -5,6 +5,7 @@ import { officialSeconds, targetState, missingDays, needsBackupReminder } from "
 import { gate, draftType, manualEntry, workplaceList } from "./entries.js";
 import { encodeBytes, decode } from "./csv.js";
 import { createStore } from "./store.js";
+import { resolveLayout, toggledLayout, LAYOUTS } from "./layout.js";
 
 const VERSION = "0.1.0";
 const store = createStore(window.localStorage);
@@ -18,6 +19,9 @@ const ui = {
   confirmDelete: null, confirmReset: false, update: false,
 };
 let tickHandle = null, msgHandle = null;
+
+const layoutNow = () => resolveLayout(S.settings.layout, window.innerWidth);
+let lastLayout = null;
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const $ = (sel) => document.querySelector(sel);
@@ -157,7 +161,7 @@ function daysView() {
   if (needsBackupReminder(S.entries, S.meta.lastExport, today)) {
     h += `<div class="msg err">Régen nem mentettél CSV-t. Az adatok csak ezen a telefonon vannak, ezért érdemes exportálni. <button class="chip acc" data-action="export">Exportálás most</button></div>`;
   }
-  h += `<section class="card"><div class="daynav">
+  h += `<section class="card span2"><div class="daynav">
       <button data-action="dayPrev" aria-label="Előző nap">‹</button>
       <div class="title">${esc(formatLong(day))}<span class="dot" style="background:${stateColor(state)}"></span></div>
       <button data-action="dayNext" aria-label="Következő nap" ${day >= today ? "disabled" : ""}>›</button></div>
@@ -188,7 +192,8 @@ function dataView() {
   const exp = S.meta.lastExport ? new Date(S.meta.lastExport).toLocaleDateString("hu-HU") : "még nem";
   let h = `<section class="card"><h2>Beállítások</h2>
     <label class="f"><span>Székhely (az Utazás alapértéke)</span><input type="text" data-ns="settings" data-field="home" value="${esc(S.settings.home)}" placeholder="pl. Pécs" autocomplete="off"></label>
-    <label class="f"><span>Napi elvárt óraszám (hétfőtől péntekig)</span><input type="number" min="1" max="12" inputmode="numeric" data-ns="settings" data-field="targetHours" value="${S.settings.targetHours}"></label></section>`;
+    <label class="f"><span>Napi elvárt óraszám (hétfőtől péntekig)</span><input type="number" min="1" max="12" inputmode="numeric" data-ns="settings" data-field="targetHours" value="${S.settings.targetHours}"></label>
+    <label class="f"><span>Nézet</span><select data-ns="settings" data-field="layout">${LAYOUTS.map((l) => `<option value="${l}" ${S.settings.layout === l ? "selected" : ""}>${{ auto: "Automatikus (széles ablakban asztali)", mobile: "Mobil", desktop: "Asztali (Windows)" }[l]}</option>`).join("")}</select></label></section>`;
   h += `<section class="card"><h2>Helyszínek</h2><div class="list-places">`;
   h += S.places.length ? S.places.map((p) => `<div class="place"><span>${esc(p)}</span><button data-action="placeRemove" data-value="${esc(p)}" aria-label="Törlés">✕</button></div>`).join("") : `<p class="empty">Még nincs mentett helyszín, rögzítéskor automatikusan épül.</p>`;
   h += `</div><div class="row" style="margin-top:10px"><input type="text" id="newPlace" placeholder="Új helyszín" autocomplete="off"><button class="btn small" style="flex:none" data-action="placeAdd">Hozzáad</button></div></section>`;
@@ -197,12 +202,12 @@ function dataView() {
     <p><button class="btn" data-action="export">CSV exportálása</button></p>
     <p><button class="btn ghost" data-action="importPick">CSV importálása (összefésülés)</button></p>
     <input type="file" id="importFile" accept=".csv,text/csv,text/plain" hidden></section>`;
-  h += `<section class="card"><h2>Telepítés a főképernyőre</h2>
-    <p class="tip"><b>iPhone (Safari):</b> Megosztás ↑ › „Főképernyőhöz adás”. <b>Android (Chrome):</b> ⋮ menü › „Alkalmazás telepítése”. Így saját ikonja lesz, teljes képernyőn fut, és internet nélkül is működik.</p></section>`;
+  h += `<section class="card"><h2>Telepítés (főképernyő, tálca)</h2>
+    <p class="tip"><b>iPhone (Safari):</b> Megosztás ↑ › „Főképernyőhöz adás”. <b>Android (Chrome):</b> ⋮ menü › „Alkalmazás telepítése”. <b>Windows/Mac (Edge vagy Chrome):</b> a címsor jobb szélén a telepítés ikon, vagy a ⋯ menü › „Alkalmazások” › „Telepítés”. Így saját ikonja lesz, saját ablakban fut, és internet nélkül is működik.</p></section>`;
   h += `<section class="card"><h2 class="danger">Összes adat törlése</h2>
     <p class="tip">Törli a bejegyzéseket, a helyszíneket és a beállításokat erről a készülékről. Előtte exportálj!</p>
     <button class="btn ghost ${ui.confirmReset ? "stop" : ""}" data-action="reset">${ui.confirmReset ? "Biztosan törlöm (még egy érintés)" : "Összes adat törlése…"}</button></section>`;
-  return h + `<p class="small" style="text-align:center">OTS Munkajelentő (web) ${VERSION} · helyben tároló változat</p>`;
+  return h + `<p class="small span2" style="text-align:center">OTS Munkajelentő (web) ${VERSION} · helyben tároló változat</p>`;
 }
 
 /** Beíráskor frissíti a Start/Rögzítés gombot és a figyelmeztetést az űrlap újrarajzolása nélkül (így a billentyűzet nyitva marad). */
@@ -221,7 +226,11 @@ function render() {
   clearInterval(tickHandle);
   const today = todayYMD();
   const todayList = entriesOn(today);
-  $("#head").innerHTML = `<h1>OTS Munkajelentő</h1><p>Ma: ${formatHM(officialSeconds(todayList))} óra · ${todayList.length} bejegyzés</p>`;
+  const desktop = layoutNow() === "desktop";
+  lastLayout = desktop ? "desktop" : "mobile";
+  document.documentElement.dataset.layout = lastLayout;
+  $("#head").innerHTML = `<div class="hrow"><div><h1>OTS Munkajelentő</h1><p>Ma: ${formatHM(officialSeconds(todayList))} óra · ${todayList.length} bejegyzés</p></div>
+    <button class="chip acc" data-action="layout" title="Váltás az elrendezések között">${desktop ? "📱 Mobil nézet" : "🖥 Asztali nézet"}</button></div>`;
   $("#tabs").innerHTML = TABS.map(([k, ic, t]) => `<button data-action="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ""}><span class="ic">${ic}</span>${t}</button>`).join("");
   let body = ui.tab === "timer" ? timerView() : ui.tab === "manual" ? manualView() : ui.tab === "days" ? daysView() : dataView();
   const updateBar = ui.update ? `<div class="msg">Új változat érhető el. <button class="chip acc" data-action="reload">Frissítés</button></div>` : "";
@@ -241,7 +250,7 @@ async function exportCSV() {
   const bytes = encodeBytes(S.entries);
   const file = new File([bytes], "bejegyzesek.csv", { type: "text/csv" });
   try {
-    if (navigator.canShare?.({ files: [file] })) {
+    if (layoutNow() !== "desktop" && navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: "OTS Munkajelentő – bejegyzések" });
     } else {
       const a = document.createElement("a");
@@ -322,6 +331,7 @@ function onClick(ev) {
     case "placeRemove": store.setPlaces(S.places.filter((p) => p !== d.value)); break;
     case "placeAdd": { const i = $("#newPlace"); if (i && i.value.trim()) store.setPlaces([...S.places, i.value]); break; }
     case "reload": location.reload(); return;
+    case "layout": store.saveSettings({ layout: toggledLayout(layoutNow()) }); break;
     case "export": exportCSV(); return;
     case "importPick": $("#importFile")?.click(); return;
     case "reset":
@@ -359,6 +369,19 @@ document.addEventListener("input", onInput);
 document.addEventListener("change", (ev) => {
   if (ev.target.id === "importFile" && ev.target.files?.[0]) { importFile(ev.target.files[0]); ev.target.value = ""; return; }
   onInput(ev);
+});
+// Asztali nézetben az Enter a Start/Rögzítés gombot nyomja meg (ha a kötelező mezők ki vannak töltve).
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" || layoutNow() !== "desktop") return;
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement) || t.dataset.ns !== "draft" || t.type === "checkbox") return;
+  const btn = $("#gateBtn");
+  if (btn && !btn.disabled) { ev.preventDefault(); btn.click(); }
+});
+let resizeHandle = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeHandle);
+  resizeHandle = setTimeout(() => { if (S.settings.layout === "auto" && layoutNow() !== lastLayout && !(document.activeElement instanceof HTMLInputElement)) render(); }, 150);
 });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); render(); }

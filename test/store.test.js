@@ -51,10 +51,18 @@ test("elvetés, törlés, importálás, alaphelyzet", () => {
 
 test("beállítások korlátozása és a tárhely-hiba jelzése", () => {
   const s = createStore(memory());
-  s.saveSettings({ home: "  Győr ", targetHours: 99 }); assert.deepEqual(s.state.settings, { home: "Győr", targetHours: 12 });
+  s.saveSettings({ home: "  Győr ", targetHours: 99 }); assert.deepEqual(s.state.settings, { home: "Győr", targetHours: 12, layout: "auto" });
   s.saveSettings({ targetHours: "x" }); assert.equal(s.state.settings.targetHours, 8);
   const full = { getItem: () => null, setItem: () => { throw new Error("quota"); }, removeItem() {} };
   const t = createStore(full); fill(t, { typeCode: "MEETING", workplace: "Győr" });
   assert.equal(t.addEntry({ id: "q", date: "2026-10-05", unit: "ora", workplace: "Győr" }), false);
   assert.match(t.error, /nem sikerült/);
+});
+
+test("nézet beállítása: érvénytelen érték automatikusra áll, a többi beállítás megmarad", () => {
+  const st = memory(); const s = createStore(st);
+  s.saveSettings({ home: "Győr", layout: "desktop" }); assert.equal(s.state.settings.layout, "desktop");
+  s.saveSettings({ targetHours: 7 }); assert.equal(s.state.settings.layout, "desktop"); assert.equal(s.state.settings.home, "Győr");
+  s.saveSettings({ layout: "ismeretlen" }); assert.equal(s.state.settings.layout, "auto");
+  s.saveSettings({ layout: "mobile" }); assert.equal(createStore(st).state.settings.layout, "mobile");
 });

@@ -80,3 +80,35 @@ input:disabled, select:disabled { opacity: .6; }
 .small { font-size: .82rem; color: var(--mut); }
 .danger { color: var(--stop); }
 .tip { font-size: .85rem; color: var(--mut); }
+
+/* ---------- Fejléc gomb ---------- */
+.hrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hrow .chip { flex: none; white-space: nowrap; margin-top: 2px; }
+
+/* ---------- Asztali nézet (Windows, nagy képernyő) ---------- */
+html[data-layout="desktop"] #app { max-width: 1120px; }
+html[data-layout="desktop"] header#head { padding: 20px 24px 6px; }
+html[data-layout="desktop"] header#head h1 { font-size: 1.4rem; }
+html[data-layout="desktop"] nav#tabs {
+  position: static; order: 1; max-width: none; margin: 4px 24px 0; padding: 0; border: 0; background: none;
+  display: flex; gap: 6px; grid-template-columns: none;
+}
+html[data-layout="desktop"] nav#tabs button {
+  flex-direction: row; gap: 8px; min-height: 42px; padding: 0 18px; border-radius: 10px; font-size: .95rem;
+  background: var(--card); border: 1px solid var(--line); color: var(--fg);
+}
+html[data-layout="desktop"] nav#tabs button .ic { font-size: 1.1rem; }
+html[data-layout="desktop"] nav#tabs button[aria-current="page"] { background: var(--ac); color: #fff; border-color: transparent; }
+html[data-layout="desktop"] nav#tabs button:hover:not([aria-current="page"]) { background: var(--field); }
+html[data-layout="desktop"] main#view {
+  order: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; align-content: start; padding: 16px 24px 48px;
+}
+html[data-layout="desktop"] main#view > .msg,
+html[data-layout="desktop"] main#view > .span2 { grid-column: 1 / -1; }
+html[data-layout="desktop"] .card { padding: 18px; }
+html[data-layout="desktop"] .btn:hover:not([disabled]) { filter: brightness(1.08); cursor: pointer; }
+html[data-layout="desktop"] .chip:hover, html[data-layout="desktop"] .item .del:hover, html[data-layout="desktop"] .place button:hover { cursor: pointer; filter: brightness(1.15); }
+html[data-layout="desktop"] .clock { font-size: 4.2rem; }
+html[data-layout="desktop"] input, html[data-layout="desktop"] select { min-height: 42px; }
+html[data-layout="desktop"] .daynav .title { font-size: 1.1rem; }
+@media (min-width: 1000px) { .hrow .chip { cursor: pointer; } }

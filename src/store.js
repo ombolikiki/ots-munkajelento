@@ -1,13 +1,14 @@
 // Helyi tárolás (localStorage) és az alkalmazás állapota. Minden adat csak ezen a készüléken marad.
 import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries } from "./entries.js";
 import { isWholeDay } from "./types.js";
+import { normalizeLayout } from "./layout.js";
 
 export const KEYS = {
   entries: "ots.entries", settings: "ots.settings", draft: "ots.draft",
   timer: "ots.timer", places: "ots.places", meta: "ots.meta",
 };
 
-export const DEFAULT_SETTINGS = { home: "", targetHours: 8 };
+export const DEFAULT_SETTINGS = { home: "", targetHours: 8, layout: "auto" };
 
 function read(storage, key, fallback) {
   try {
@@ -46,6 +47,7 @@ export function createStore(storage) {
       state.settings = {
         home: String(patch.home ?? state.settings.home).trim(),
         targetHours: Number.isFinite(t) ? Math.min(12, Math.max(1, Math.round(t))) : 8,
+        layout: normalizeLayout(patch.layout ?? state.settings.layout),
       };
       write(KEYS.settings, state.settings);
     },
