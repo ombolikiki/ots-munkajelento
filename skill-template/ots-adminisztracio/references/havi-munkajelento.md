@@ -76,7 +76,7 @@ Az adatok a felhasználó **OTS Munkajelentő Tracker** alkalmazásának adatfá
 - Az alkalom és a fő is 1 órának számít a sor összegében (a 8-ra kiegészítésnél és a 8 órás korlátnál), a tracker napi összesítője is így számol.
 - `Egység = alkalom` vagy `fo`: a nap azonos `Típus kód` értékű bejegyzéseinek `Mennyiség` összege (nincs kerekítés, nincs időből számolás).
 - `DAY_OFF` (`Típus kód`): Munkahely = `SZABADNAP`, a sor többi része üres. `PUBLIC_HOLIDAY`: Munkahely = `MUNKASZÜNETI NAP`, a többi üres. `HOLIDAY`: a **Szabadság?** jelölőnégyzetet pipáld ki, semmi mást ne írj a sorba.
-- **Munkahely mező:** a nap bejegyzéseinek (az egész napos és az `EGYEDI_` kódú bejegyzések nélkül) különböző `Munkahely` értékei (utazásnál a Munkahely(ek) elemei; az `Indulás` és az `Érkezés` nem kerül ide), időrendben, vesszővel elválasztva (pl. `Település1, Település2`). A `!!!` szabályok (üres nap stb.) változatlanok. A tracker kötelezővé teszi a Munkahely mezőt, ezért itt nem kell településnevet keresni a leírásban.
+- **Munkahely mező:** a nap bejegyzéseinek (az egész napos és az `EGYEDI_` kódú bejegyzések nélkül) különböző `Munkahely` értékei (utazásnál a Munkahely(ek) elemei; az `Indulás` és az `Érkezés` nem kerül ide, kivéve ha a `Munkahely helye` oszlop értéke `indulás`: akkor az Utazás munkahelye az `Indulás`, és a `Munkahely` oszlop elemei nem kerülnek ide), időrendben, vesszővel elválasztva (pl. `Település1, Település2`). A `!!!` szabályok (üres nap stb.) változatlanok. A tracker kötelezővé teszi a Munkahely mezőt, ezért itt nem kell településnevet keresni a leírásban.
 - Ha egy napnak nincs bejegyzése, a korábbi üres-nap szabályok érvényesek (hétköznap és szombat: `!!!`, vasárnap: `SZABADNAP`).
 
 ## Nem munkaidős bejegyzések

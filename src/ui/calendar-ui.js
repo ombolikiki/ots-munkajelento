@@ -1,4 +1,5 @@
 // Naptár-összekapcsolás (Google, Outlook): beállítások, a „Hiányos” és „Nem felismert” események listája, a szinkron ütemezése.
+import { placeText } from "../entries.js";
 import { createAuth } from "../calendarAuth.js";
 import { createGoogleProvider, createMicrosoftProvider, combineSources } from "../calendarSources.js";
 import { createSyncer } from "../calendarSync.js";
@@ -137,6 +138,19 @@ export function resolveBannerHTML() {
   return r ? `<div class="banner">${icon("calendar", 1.1)}<div><strong>Naptáresemény kitöltése</strong><div class="small mut">${esc(r.title || "")}: a rögzítés a naptáreseményhez kapcsolódik.</div></div><button class="btn small ghost" data-action="calResolveCancel">Mégse</button></div>` : "";
 }
 
+/** A naptári Utazás Cél mezője: a munkahelyek (a pontos címükkel), egyirányú útnál az Érkezés is, ha az nem az utolsó munkahely. */
+function destinationText(d) {
+  const pool = String(d.address ?? "").split(" - ").map((s) => s.trim()).filter(Boolean);
+  const names = String(d.workplace ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = names.map((n) => {
+    const i = pool.findIndex((a) => { const st = place(a).settlement; return st && st.toLowerCase() === n.toLowerCase(); });
+    return placeText(n, i >= 0 ? pool.splice(i, 1)[0] : null);
+  });
+  const arr = String(d.arrival ?? "").trim();
+  if (arr && d.arrival !== d.departure && arr.toLowerCase() !== (names[names.length - 1] || "").toLowerCase()) parts.push(arr);
+  return parts.join(", ");
+}
+
 // ---------- Műveletek ----------
 
 function prefill(item) {
@@ -147,7 +161,12 @@ function prefill(item) {
   const dr = S.draft;
   const loc = place((ev.location || "").split(/\s[-–—]\s/)[0]).settlement || "";
   dr.workplace = d0 ? d0.workplace : loc; dr.activity = d0 ? d0.activity : ev.title;
-  if (d0 && item.type && item.type.code === "TRAVEL") { dr.departure = d0.departure || ""; dr.arrival = d0.arrival || ""; dr.roundTrip = !!(d0.departure && d0.departure === d0.arrival); }
+  if (item.type && item.type.code === "TRAVEL") {
+    dr.roundTrip = !d0 || !!(d0.departure && d0.departure === d0.arrival);
+    dr.workplaceIsDeparture = false;
+    if (d0) dr.departure = d0.departure || dr.departure;
+    dr.destination = d0 ? destinationText(d0) : loc;
+  }
   if (d0 && d0.quantity) dr.quantity = d0.quantity;
   store.saveDraft();
   ui.day = day; ui.mode = "manual"; ui.settings = false; ui.pending = null;

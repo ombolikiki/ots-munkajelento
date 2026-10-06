@@ -1,6 +1,7 @@
 // Közös mezők (Időzítő, Kézi bevitel, Pomodoro, Naptár): típus, munkahely, Utazás, mennyiség, tevékenység.
 import { groupedTypes, isTravel, isWholeDay, hasQuantity, quantityUnit } from "../types.js";
-import { draftType, workplaceList } from "../entries.js";
+import { draftType } from "../entries.js";
+import { parsePlaces } from "../calendarParser.js";
 import { ctx } from "./ctx.js";
 import { esc } from "./util.js";
 import { icon } from "./icons.js";
@@ -21,15 +22,17 @@ export function fieldsHTML() {
   const d = ctx.S.draft, type = draftType(d), travel = isTravel(type), whole = isWholeDay(type);
   const typeOptions = groupedTypes().map((g) =>
     `<optgroup label="${esc(g.name)}">${g.types.map((t) => `<option value="${esc(t.code)}" ${d.typeCode === t.code ? "selected" : ""}>${esc(t.label)}</option>`).join("")}</optgroup>`).join("");
-  const showWork = !type || !whole;
+  const showWork = !travel && (!type || !whole);
   let h = `<section class="card fields"><div class="row2">`;
-  if (showWork) h += `<label class="f"><span>${travel ? "Munkahely(ek)" : "Munkahely"}</span>${placeField("workplace", d.workplace, travel ? "pl. Mohács, Szigetvár" : "Munkahely", { append: travel })}</label>`;
+  if (showWork) h += `<label class="f"><span>Munkahely</span>${placeField("workplace", d.workplace, "Munkahely")}</label>`;
   h += `<label class="f"><span>Tevékenység típusa</span><select data-ns="draft" data-field="typeCode"><option value="">Válassz típust…</option>${typeOptions}</select></label></div>`;
   if (travel) {
-    h += `<div class="row2"><label class="f"><span>Indulás</span>${placeField("departure", d.departure, "Tata vagy Tata, Fő út 1.")}</label>
-      <div class="f"><div class="f-head"><span>Érkezés</span>
-        <label class="check small" title="Oda-vissza út: az útvonal végére az Indulás is kerül (Indulás - Munkahely(ek) - Érkezés - Indulás)"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""}> Oda-vissza</label></div>
-        ${placeField("arrival", d.arrival, d.roundTrip ? "Érkezés (nem kötelező)" : "Tata vagy Tata, Fő út 1.")}</div></div>`;
+    h += `<div class="row2"><label class="f"><span>Kiindulás</span>${placeField("departure", d.departure, "Tata vagy Tata, Fő út 1.")}</label>
+      <label class="f"><span>Cél</span>${placeField("destination", d.destination, "Mór, Tata vagy Tata, Kossuth u. 5.", { append: true })}</label></div>
+      <div class="travelopts"><div class="radios" role="radiogroup" aria-label="Munkahely"><span class="mut small">Munkahely:</span>
+        <label class="check small"><input type="radio" name="wplace" data-ns="draft" data-field="workplaceIsDeparture" value="1" ${d.workplaceIsDeparture ? "checked" : ""}> Kiindulás</label>
+        <label class="check small"><input type="radio" name="wplace" data-ns="draft" data-field="workplaceIsDeparture" value="0" ${d.workplaceIsDeparture ? "" : "checked"}> Cél</label></div>
+        <label class="check small" title="Oda-vissza út: a munka után visszatértem a Kiindulásra (Kiindulás - Cél(ek) - Kiindulás)"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""}> Oda-vissza</label></div>`;
   }
   if (type && hasQuantity(type)) {
     h += `<div class="stepline"><span class="mut">Mennyiség</span><div class="stepper">
@@ -47,9 +50,9 @@ export function fieldsHTML() {
 export function pickPlace(field, value, append) {
   const d = ctx.S.draft;
   if (append) {
-    const l = workplaceList(d[field]);
-    if (!l.some((x) => x.toLowerCase() === value.toLowerCase())) l.push(value);
-    d[field] = l.join(", ");
+    const cur = String(d[field] ?? "").trim();
+    const have = (parsePlaces(cur) || []).some((p) => p.settlement.toLowerCase() === value.toLowerCase());
+    if (!have) d[field] = cur ? cur + ", " + value : value;
   } else d[field] = value;
   ctx.store.saveDraft();
 }

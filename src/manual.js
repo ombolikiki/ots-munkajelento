@@ -42,8 +42,8 @@ export function routePoints(e, home) {
 
 /**
  * Az útvonal pontjai pontos címekkel: a Munkahely(ek) pontjaihoz a bejegyzés `Cím` mezőjének azonos településű címei kerülnek (sorrendben,
- * egy cím egyszer); az Indulás és az Érkezés pontját a saját `Indulás cím` és `Érkezés cím` mezője adja. Csak az azonos nevű, cím nélküli
- * szomszédos pontok vonódnak össze. Visszatér [{name, address}].
+ * egy cím egyszer); az Indulás és az Érkezés pontját a saját `Indulás cím` és `Érkezés cím` mezője adja. Az azonos nevű szomszédos pontok
+ * összevonódnak, ha a későbbinek nincs külön címe. Visszatér [{name, address}].
  */
 export function routeDetail(e, home) {
   const dep = String(e.departure ?? "").trim(), arr = String(e.arrival ?? "").trim();
@@ -52,7 +52,7 @@ export function routeDetail(e, home) {
   const add = (p) => {
     if (!p.name) return;
     const last = points[points.length - 1];
-    if (last && !last.address && !p.address && sameText(last.name, p.name)) return;
+    if (last && !p.address && sameText(last.name, p.name)) return;   // az azonos nevű szomszédos pont összevonódik, ha a későbbinek nincs külön címe
     points.push(p);
   };
   add({ name: dep || home, address: dep ? e.departureAddress || null : null });
@@ -68,7 +68,8 @@ export function routeDetail(e, home) {
 export function workplaceList(entries) {
   const places = [];
   for (const e of chronological(entries)) {
-    const parts = isTravel({ code: e.type }) ? splitList(e.workplace) : [String(e.workplace ?? "").trim()];
+    // Utazásnál a Munkahely(ek) lista, vagy ha a munkahely az Indulás volt (Munkahely helye = indulás), az Indulás.
+    const parts = isTravel({ code: e.type }) ? (e.workplaceIsDeparture ? [String(e.departure ?? "").trim()] : splitList(e.workplace)) : [String(e.workplace ?? "").trim()];
     for (const p of parts) if (p && !places.some((x) => sameText(x, p))) places.push(p);
   }
   return places;

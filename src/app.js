@@ -218,6 +218,7 @@ function onInput(ev) {
   switch (ns) {
     case "draft":
       if (f === "typeCode") { if (isChange) { store.setDraftType(value); render(); } return; }
+      if (f === "workplaceIsDeparture") { if (el.checked) { S.draft[f] = value === "1"; store.saveDraft(); } return; }
       S.draft[f] = value; store.saveDraft();
       if (isChange && f === "roundTrip") render(); else capture.refreshGate();
       return;
@@ -230,6 +231,7 @@ function onInput(ev) {
         }
       } else capture.refreshGate();
       return;
+    case "tstart": if (isChange) { capture.setStartTime(value); render(); } return;
     case "pomo": if (isChange) { store.saveSettings({ pomo: { ...S.settings.pomo, [f]: value } }); render(); } return;
     case "set": if (isChange) { settings.onSettingChange(el); render(); if (f === "syncEnabled" && value) calui.syncNow({ auto: false }); } return;
     case "calsel": if (isChange) { calui.onCalSelect(el); render(); } return;

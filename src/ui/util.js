@@ -22,7 +22,8 @@ export function entryWhen(e) {
 /** Második sor: utazásnál az útvonal (Indulás → Munkahely(ek) → Érkezés), egyébként munkahely · tevékenység. */
 export function entryDetail(e) {
   if (e.departure || e.arrival) {
-    const route = [e.departure, ...workplaceList(e.workplace), e.arrival].filter(Boolean).join(" → ");
+    const route = [e.departure, ...workplaceList(e.workplace), e.arrival].filter(Boolean)
+      .filter((p, i, a) => !i || p.toLowerCase() !== a[i - 1].toLowerCase()).join(" → ");
     return [route, e.activity].filter(Boolean).join(" · ");
   }
   return [e.workplace, e.activity].filter(Boolean).join(" · ");

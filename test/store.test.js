@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createStore, KEYS, sanitizeSettings, DEFAULT_SETTINGS } from "../src/store.js";
 import { configureTypes } from "../src/types.js";
+import { clampStart } from "../src/entries.js";
 import { memoryStorage as memory } from "./fakefs.js";
 
 test.afterEach(() => configureTypes({}));
@@ -31,7 +32,7 @@ test("beállítások érvényesítése: hibás érték alapértékre áll, a hat
   assert.deepEqual(sanitizeSettings(undefined), sanitizeSettings(DEFAULT_SETTINGS));
 });
 
-test("időmérő: indítás csak kitöltött űrlappal, leállítás menti és kiüríti az űrlapot (az oda-vissza jelölő marad)", () => {
+test("időmérő: indítás csak kitöltött űrlappal, leállítás menti és kiüríti az űrlapot (az Oda-vissza újra bejelölt)", () => {
   const st = memory(); const s = createStore(st);
   assert.equal(s.startTimer(1000), false);                               // nincs típus
   fill(s, { typeCode: "HOLIDAY" }); assert.equal(s.startTimer(1000), false);   // egész napos
@@ -57,7 +58,7 @@ test("típusváltás: Utazásnál a székhely az alapérték, mennyiség nélkü
   const s = createStore(memory());
   s.saveSettings({ home: "Pécs" });
   fill(s, { quantity: 5 }); s.setDraftType("TRAVEL");
-  assert.equal(s.state.draft.departure, "Pécs"); assert.equal(s.state.draft.arrival, "Pécs"); assert.equal(s.state.draft.quantity, 1);
+  assert.equal(s.state.draft.departure, "Pécs"); assert.equal(s.state.draft.roundTrip, true); assert.equal(s.state.draft.workplaceIsDeparture, false); assert.equal(s.state.draft.quantity, 1);
   fill(s, { departure: "Mór" }); s.setDraftType("MEETING"); s.setDraftType("TRAVEL");
   assert.equal(s.state.draft.departure, "Mór");   // a már kitöltött nem íródik felül
   s.setDraftType("VISITING"); fill(s, { quantity: 4 }); s.setDraftType("VISITING"); assert.equal(s.state.draft.quantity, 4);
@@ -149,4 +150,29 @@ test("a régi (mobilos) beállítások megmaradnak, a megszűnt nézetbeállít�
   st.setItem(KEYS.settings, JSON.stringify({ home: "Győr", targetHours: 7, layout: "mobile" }));
   const s = createStore(st);
   assert.equal(s.state.settings.home, "Győr"); assert.equal(s.state.settings.targetHours, 7); assert.equal("layout" in s.state.settings, false);
+});
+
+test("időmérő: korábbi kezdés (legfeljebb a mai nap elejéig, jövőbeli nem), futás közben is javítható", () => {
+  const s = createStore(memory());
+  fill(s, { typeCode: "MEETING", workplace: "Győr" });
+  const now = new Date(2026, 9, 5, 9, 0, 0).getTime(), dayStart = new Date(2026, 9, 5).getTime();
+  assert.equal(clampStart(now + 600000, now), now);                       // jövőbeli nem lehet
+  assert.equal(clampStart(dayStart - 3600000, now), dayStart);            // a mai nap elejénél korábbi nem
+  assert.equal(clampStart(now - 300000, now), now - 300000);
+  assert.equal(s.startTimer(now, now - 600000), true);
+  assert.equal(s.state.timer.startMs, now - 600000);
+  assert.equal(s.setTimerStart(now - 120000, now), true); assert.equal(s.state.timer.startMs, now - 120000);
+  s.setTimerStart(now + 3600000, now); assert.equal(s.state.timer.startMs, now);
+  s.setTimerStart(dayStart - 86400000 * 3, now); assert.equal(s.state.timer.startMs, dayStart);
+  s.setTimerStart(now - 300000, now);
+  const e = s.stopTimer(now);
+  assert.equal(e.durationSeconds, 300); assert.equal(e.start, "08:55:00"); assert.equal(e.date, "2026-10-05");
+  assert.equal(s.setTimerStart(now, now), false);                         // nem fut időmérő
+});
+
+test("a régi (Indulás / Munkahely(ek) / Érkezés) piszkozat átkerül az új Kiindulás / Cél űrlapra", () => {
+  const st = memory();
+  st.setItem("ots.draft", JSON.stringify({ typeCode: "TRAVEL", workplace: "Tata, Mór", departure: "Győr", arrival: "Győr", roundTrip: false, activity: "x" }));
+  const d = createStore(st).state.draft;
+  assert.equal(d.destination, "Tata, Mór"); assert.equal(d.departure, "Győr"); assert.equal(d.roundTrip, true); assert.equal("arrival" in d, false);
 });

@@ -1,16 +1,16 @@
 // Bejegyzések létrehozása és az űrlap szabályai (tiszta függvények, tesztelhetők).
 import { UNIT, isTravel, isWholeDay, hasQuantity, lookupByCode } from "./types.js";
 import { uuid } from "./csv.js";
-import { parsePlace, fold } from "./calendarParser.js";
+import { parsePlace, parsePlaces } from "./calendarParser.js";
 import { toYMD, hhmmss, todayYMD, parseTime, parseYMD, pad } from "./dates.js";
 
 export const emptyDraft = () => ({
-  typeCode: "", workplace: "", activity: "", departure: "", arrival: "", roundTrip: false, quantity: 1,
+  typeCode: "", workplace: "", activity: "", departure: "", destination: "", roundTrip: true, workplaceIsDeparture: false, quantity: 1,
 });
 
 export const draftType = (d) => lookupByCode(d.typeCode);
 
-/** Típusváltás az űrlapon (a natív app szabályai): mennyiség nélküli típusnál 1; Utazásnál az üres Indulás/Érkezés a székhely. */
+/** Típusváltás az űrlapon (a natív app szabályai): mennyiség nélküli típusnál 1; Utazásnál az üres Kiindulás a székhely. */
 export function applyType(d, code, home = "") {
   const next = { ...d, typeCode: code };
   const type = lookupByCode(code);
@@ -18,17 +18,37 @@ export function applyType(d, code, home = "") {
   if (isTravel(type)) {
     const h = String(home ?? "").trim();
     if (!next.departure) next.departure = h;
-    if (!next.arrival) next.arrival = h;
   }
   return next;
 }
 
-/** Az űrlap kiürítése rögzítés után (az oda-vissza jelölő megmarad, mint a natív appban). */
-export const clearedDraft = (d) => ({ ...emptyDraft(), roundTrip: !!d.roundTrip });
+/** Az űrlap kiürítése rögzítés után (az Oda-vissza jelölő újra bejelölt, a Munkahely a Cél, mint a natív appban). */
+export const clearedDraft = () => emptyDraft();
 
 /** Munkahely(ek) szövege -> tiszta lista. */
 export const workplaceList = (text) =>
   String(text ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+const ORIGIN_HINT = "Kiindulás: egyetlen hely (település, vagy település és cím vesszővel, például Tata, Fő út 1.).";
+const DEST_HINT = "Cél: egy vagy több hely vesszővel (település, vagy település és cím, például Tata, Kossuth u. 5., Mór).";
+
+/** Régebbi (Indulás / Munkahely(ek) / Érkezés) piszkozat átvétele az új Kiindulás / Cél űrlapra. */
+export function migrateDraft(d, stored) {
+  const out = { ...d };
+  delete out.arrival;
+  if (stored.destination === undefined) {
+    out.destination = stored.typeCode === "TRAVEL" ? String(stored.workplace ?? "") : "";
+    out.roundTrip = true;
+  }
+  out.workplaceIsDeparture = !!out.workplaceIsDeparture;
+  return out;
+}
+
+/** Az Időzítő kezdése: jövőbeli nem lehet, és legfeljebb a mai nap elejéig mehet vissza. Visszatér ezredmásodperc. */
+export function clampStart(startMs, nowMs) {
+  const n = new Date(nowMs), dayStart = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  return Math.min(nowMs, Math.max(dayStart, startMs));
+}
 
 /** Hiányzó kötelező mezők szövege, vagy null, ha az űrlap rendben van. */
 export function missingHint(d) {
@@ -37,12 +57,13 @@ export function missingHint(d) {
   if (isWholeDay(type)) return null;
   if (isTravel(type)) {
     const miss = [];
-    if (!d.departure.trim()) miss.push("Indulás");
-    if (!workplaceList(d.workplace).length) miss.push("Munkahely(ek)");
-    if (!d.roundTrip && !d.arrival.trim()) miss.push("Érkezés");
+    if (!d.departure.trim()) miss.push("Kiindulás");
+    if (!d.destination.trim()) miss.push("Cél");
     if (!d.activity.trim()) miss.push("Tevékenység");
     if (miss.length) return "Kötelező mező: " + miss.join(", ") + ".";
-    return placeHint(d.departure, "Indulás") || placeHint(d.arrival, "Érkezés");
+    if (!parsePlace(d.departure)) return ORIGIN_HINT;
+    if (!parsePlaces(d.destination)) return DEST_HINT;
+    return null;
   }
   return d.workplace.trim() ? null : "A Munkahely mező kötelező.";
 }
@@ -56,50 +77,51 @@ export function gate(tab, d) {
 }
 
 /**
- * Az Utazás összeállított útvonala a bejegyzéshez (a natív app TravelPlan megfelelője). Az Indulás és az Érkezés település vagy
- * település és pontos cím („Tata” / „Tata, Fő út 1.”). Oda-vissza útnál az útvonal végére az Indulás kerül (az Érkezés a bejegyzésben az
- * Indulás), a beírt Érkezés pedig utolsó Munkahelyként (kivéve, ha ugyanaz a település és nincs külön címe). Null, ha nem állapítható meg.
+ * Az Utazás összeállított terve a bejegyzéshez (a natív app TravelPlan megfelelője): Kiindulás (egy hely), Cél (egy vagy több hely, vesszővel),
+ * mindegyik település vagy település és pontos cím. Null, ha nem állapítható meg.
  */
 export function travelPlan(d) {
-  const dep = parsePlace(d.departure);
-  if (!dep) return null;
-  const works = workplaceList(d.workplace);
-  let stopAddress = null, arr;
-  if (d.roundTrip) {
-    arr = dep;
-    const a = parsePlace(d.arrival);
-    if (a && (fold(a.settlement) !== fold(dep.settlement) || a.address)) {
-      if (!works.length || fold(works[works.length - 1]) !== fold(a.settlement)) works.push(a.settlement);
-      stopAddress = a.address;
-    }
-  } else {
-    arr = parsePlace(d.arrival);
-    if (!arr) return null;
-  }
-  return { departure: dep, arrival: arr, workplaces: works, stopAddress };
+  const origin = parsePlace(d.departure), stops = parsePlaces(d.destination);
+  return origin && stops ? { origin, stops } : null;
 }
 
-const placeHint = (raw, name) => {
-  const t = String(raw ?? "").trim();
-  return t && !parsePlace(t) ? `${name}: település, vagy település és cím vesszővel (például Tata, Fő út 1.).` : null;
-};
+/**
+ * Az Utazás CSV-leképezése (a skill és a régi fájlok változtatás nélkül működjenek): Indulás = a Kiindulás települése; Munkahely = a Cél helyeinek
+ * települései; Érkezés = oda-vissza útnál a Kiindulás, egyirányúnál a Cél utolsó helye; Cím = a Cél pontos címei; Indulás cím = a Kiindulás címe;
+ * Érkezés cím = oda-vissza útnál a Kiindulás címe.
+ */
+function travelFields(d) {
+  const plan = travelPlan(d);
+  if (!plan) return { departure: d.departure.trim(), arrival: d.departure.trim(), workplace: d.destination.trim(), address: null, departureAddress: null, arrivalAddress: null };
+  const last = plan.stops[plan.stops.length - 1];
+  const stopAddresses = plan.stops.map((p) => p.address).filter(Boolean);
+  return {
+    departure: plan.origin.settlement,
+    arrival: d.roundTrip ? plan.origin.settlement : last.settlement,
+    workplace: plan.stops.map((p) => p.settlement).join(", "),
+    address: stopAddresses.length ? stopAddresses.join(" - ") : null,
+    departureAddress: plan.origin.address,
+    arrivalAddress: d.roundTrip ? plan.origin.address : null,
+  };
+}
 
 /** Közös bejegyzés-mezők a piszkozatból. */
 function base(d, type, source) {
-  const plan = isTravel(type) ? travelPlan(d) : null;
-  const entry = {
+  const travel = isTravel(type);
+  const t = travel ? travelFields(d) : null;
+  return {
     id: uuid(), date: "", start: null, end: null, durationSeconds: 0,
-    workplace: isTravel(type) ? (plan ? plan.workplaces : workplaceList(d.workplace)).join(", ") : d.workplace.trim(),
+    workplace: travel ? t.workplace : d.workplace.trim(),
     type: type.code, typeLabel: type.label, unit: type.unit,
     quantity: hasQuantity(type) ? Math.min(999, Math.max(1, Math.trunc(d.quantity) || 1)) : null,
     activity: d.activity.trim(), source,
-    departure: plan ? plan.departure.settlement : isTravel(type) ? d.departure.trim() : null,
-    arrival: plan ? plan.arrival.settlement : isTravel(type) ? (d.arrival.trim() || d.departure.trim()) : null,
-    address: plan ? plan.stopAddress : null,
-    departureAddress: plan ? plan.departure.address : null,
-    arrivalAddress: plan ? plan.arrival.address : null,
+    departure: t ? t.departure : null,
+    arrival: t ? t.arrival : null,
+    address: t ? t.address : null,
+    departureAddress: t ? t.departureAddress : null,
+    arrivalAddress: t ? t.arrivalAddress : null,
+    workplaceIsDeparture: travel && !!d.workplaceIsDeparture,
   };
-  return entry;
 }
 
 /** Egész napos bejegyzés (Szabadság, Szabadnap, Munkaszüneti nap). */
@@ -208,4 +230,13 @@ export function mergeEntries(existing, incoming) {
   const ids = new Set(existing.map((e) => e.id));
   const added = incoming.filter((e) => !ids.has(e.id));
   return { entries: sortEntries([...existing, ...added]), added: added.length, skipped: incoming.length - added.length };
+}
+
+/** Egy hely az űrlap szövegében: „Tata” vagy „Tata, Fő út 1.” (a tárolt „Fő út 1., Tata” cím településes alakból). */
+export function placeText(settlement, address) {
+  const st = String(settlement ?? "").trim();
+  if (!address) return st;
+  const suffix = ", " + st;
+  const street = address.endsWith(suffix) ? address.slice(0, -suffix.length) : address;
+  return `${st}, ${street}`;
 }

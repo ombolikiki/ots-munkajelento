@@ -94,21 +94,53 @@ export function place(raw) {
   return { settlement, address: parts.length >= 2 ? parts.join(", ") : null };
 }
 
+const STREET_WORDS = new Set(["ut", "utca", "u", "ter", "korut", "krt", "setany", "koz", "dulo", "sor", "fasor", "rakpart", "liget", "major",
+  "emelet", "em", "ajto", "fszt", "lepcsohaz", "epulet", "ep", "hrsz"]);
+/** A cím folytatása (az utcarész után): emelet, ajtó stb.; ezek nem új cím. */
+const CONTINUATION_WORDS = new Set(["emelet", "em", "ajto", "fszt", "lepcsohaz", "epulet", "ep", "hrsz"]);
+const wordsOf = (t) => fold(t).split(" ").map((w) => w.replace(/^[.,;]+|[.,;]+$/g, "")).filter(Boolean);
+const isStreetLike = (t) => Array.from(t).some(isDigit) || wordsOf(t).some((w) => STREET_WORDS.has(w));
+const isContinuation = (t) => wordsOf(t).some((w) => CONTINUATION_WORDS.has(w));
+
 /**
- * Egy beírt hely (az Utazás Indulás és Érkezés mezője): „Tata” vagy „Tata, Fő út 1.” (település elöl); a fordított „Fő út 1., Tata” és az
- * irányítószám is érthető. Visszatér {settlement, address} (a cím utcával elöl, településsel a végén), vagy null, ha üres vagy a település
- * nem állapítható meg.
+ * Egy vagy több beírt hely (az Utazás Kiindulás és Cél mezője): „Tata”, „Tata, Fő út 1.”, „Tata, Mór”, „Tata, Fő út 1., Mór”.
+ * A vesszővel elválasztott részek közül az utcára/házszámra utaló rész a megelőző településhez tartozó cím (település elöl); ha még nincs
+ * település, a következőhöz (a fordított „Fő út 1., Tata” is érthető). Minden más rész új település. A helyeket ` - ` vagy `;` is elválaszthatja.
+ * Az irányítószám és a záró „Magyarország” elmarad. Visszatér [{settlement, address}] (a cím utcával elöl, településsel a végén), vagy null,
+ * ha üres, vagy egy cím mellé nem kerül település.
  */
+export function parsePlaces(raw) {
+  const groups = String(raw ?? "").split(";").flatMap(splitLocations);
+  if (!groups.length) return null;
+  const out = [];
+  for (const g of groups) {
+    const tokens = g.split(",").map(normalizeSpaces).filter(Boolean);
+    if (tokens.length > 1 && COUNTRIES.has(fold(tokens[tokens.length - 1]))) tokens.pop();
+    let pending = [], current = null;
+    const flush = () => {
+      if (current) { out.push({ settlement: current.settlement, address: current.street.length ? [...current.street, current.settlement].join(", ") : null }); current = null; }
+    };
+    for (const t of tokens) {
+      const core = stripPostalCode(t);
+      if (!core) continue;
+      if (isStreetLike(core)) {
+        if (current) {
+          if (!current.street.length || isContinuation(core)) current.street.push(core);
+          else { flush(); pending = [core]; }   // új, utcával kezdődő cím
+        } else pending.push(core);
+      } else if (!pending.length) { flush(); current = { settlement: core, street: [] }; }
+      else { out.push({ settlement: core, address: [...pending, core].join(", ") }); pending = []; }
+    }
+    flush();
+    if (pending.length) return null;
+  }
+  return out.length ? out : null;
+}
+
+/** Egyetlen beírt hely (például a Kiindulás); null, ha több helyet adtak meg, vagy hibás. */
 export function parsePlace(raw) {
-  const parts = String(raw ?? "").split(",").map(normalizeSpaces).filter(Boolean);
-  if (parts.length > 1 && COUNTRIES.has(fold(parts[parts.length - 1]))) parts.pop();
-  if (!parts.length) return null;
-  const first = stripPostalCode(parts[0]);
-  const noDigit = (s) => !!s && !Array.from(s).some(isDigit);
-  if (parts.length === 1) return noDigit(first) ? { settlement: first, address: null } : null;
-  if (noDigit(first)) return { settlement: first, address: parts.slice(1).join(", ") + ", " + first };
-  const p = place(parts.join(", "));   // fordított sorrend: utca elöl, település a végén
-  return p.settlement && p.address ? { settlement: p.settlement, address: p.address } : null;
+  const list = parsePlaces(raw);
+  return list && list.length === 1 ? list[0] : null;
 }
 
 // ---------- Cím (típus utáni rész) ----------

@@ -1,6 +1,6 @@
 // Az alkalmazás állapota és tárolása. A böngésző tárhelye (localStorage) a gyorsítótár; ha az adatmappa ki van választva,
 // a bejegyzések, a létszámjelentések és a mutatófájl automatikusan a mappába is íródnak (lásd folder.js).
-import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft } from "./entries.js";
+import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft, migrateDraft, clampStart } from "./entries.js";
 import { isWholeDay, configureTypes, lookupByCode, BUILTIN_TYPES, makeCustomCode, normalizeHex, UNIT } from "./types.js";
 import { encodeBytes, decode } from "./csv.js";
 import * as ATT from "./attendance.js";
@@ -104,7 +104,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     attendance: asArray(read(storage, KEYS.attendance, [])).filter(isReport),
     places: asArray(read(storage, KEYS.places, [])).filter((p) => typeof p === "string"),
     settings: sanitizeSettings(read(storage, KEYS.settings, {})),
-    draft: { ...emptyDraft(), ...(read(storage, KEYS.draft, {}) || {}) },
+    draft: migrateDraft({ ...emptyDraft(), ...(read(storage, KEYS.draft, {}) || {}) }, read(storage, KEYS.draft, {}) || {}),
     timer: read(storage, KEYS.timer, null),
     pomo: P.normalizeState(read(storage, KEYS.pomo, null)),
     done: (() => { const d = read(storage, KEYS.done, {}); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; })(),
@@ -351,10 +351,17 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     markExported(nowMs = Date.now()) { state.meta.lastExport = nowMs; saveMeta(); },
 
     // ---------- Időmérő ----------
-    startTimer(nowMs = Date.now()) {
+    /** plannedMs: előre megadott, korábbi kezdés (legfeljebb a mai nap elejéig, jövőbeli nem lehet). */
+    startTimer(nowMs = Date.now(), plannedMs = null) {
       const type = draftType(state.draft);
       if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft)) return false;
-      state.timer = { startMs: nowMs };
+      state.timer = { startMs: plannedMs == null ? nowMs : clampStart(plannedMs, nowMs) };
+      return write(KEYS.timer, state.timer);
+    },
+    /** A futó időzítő kezdésének javítása (a szabályok ugyanazok: legfeljebb a mai nap eleje, jövőbeli nem). */
+    setTimerStart(startMs, nowMs = Date.now()) {
+      if (!state.timer) return false;
+      state.timer = { ...state.timer, startMs: clampStart(startMs, nowMs) };
       return write(KEYS.timer, state.timer);
     },
     stopTimer(nowMs = Date.now()) {

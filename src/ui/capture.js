@@ -1,10 +1,11 @@
 // Rögzítési módok: Időzítő, Kézi bevitel, Pomodoro.
 import { UNIT, isWholeDay } from "../types.js";
 import { gate, draftType, manualEntry } from "../entries.js";
-import { todayYMD, formatClock, formatHM } from "../dates.js";
+import { todayYMD, formatClock, formatHM, parseTime } from "../dates.js";
 import * as P from "../pomodoro.js";
 import { ctx, ui } from "./ctx.js";
 import { esc, $, timeValue } from "./util.js";
+import { clampStart } from "../entries.js";
 import { icon } from "./icons.js";
 import { fieldsHTML } from "./fields.js";
 import { askNotifications } from "./sound.js";
@@ -16,13 +17,37 @@ const hint = (text, id = "gateHint") => `<p class="hint" id="${id}" ${text ? "" 
 
 // ---------- Időzítő ----------
 
+const START_MINUTES = [5, 10, 15, 30];
+
+/** A Kezdés sora: óó:pp mező és a −5/−10/−15/−30 perc gombok; a „Most” visszaállít. Futás közben a futó időzítő kezdését javítja. */
+function startRowHTML(running) {
+  const S = ctx.S, now = ctx.now();
+  const startMs = running ? S.timer.startMs : ui.plannedStart;
+  const isNow = !running && ui.plannedStart == null;
+  const val = startMs == null ? "" : timeValue(new Date(startMs));
+  const chips = START_MINUTES.map((m) => `<button type="button" class="chip" data-action="timerBack" data-min="${m}" title="A kezdés ${m} perccel korábbi">−${m}</button>`).join("");
+  return `<div class="startrow"><span class="mut small">Kezdés</span>
+    <input type="time" data-ns="tstart" data-field="start" value="${esc(val)}" aria-label="Kezdés (óó:pp)" title="Legfeljebb a mai nap elejéig mehet vissza, jövőbeli nem lehet">
+    <button type="button" class="chip" data-action="timerNowStart" aria-pressed="${isNow}" title="A kezdés a pillanatnyi idő">Most</button>${chips}</div>`;
+}
+
+/** A Kezdés mező értéke (óó:pp) -> az Időzítő kezdése a mai napon. */
+export function setStartTime(value) {
+  const secs = parseTime(value), now = ctx.now();
+  if (secs == null) { ui.plannedStart = null; return; }
+  const n = new Date(now);
+  const ms = new Date(n.getFullYear(), n.getMonth(), n.getDate(), Math.floor(secs / 3600), Math.floor((secs % 3600) / 60), 0, 0).getTime();
+  if (ms > now) ctx.say("A kezdés nem lehet jövőbeli.", true);
+  if (ctx.S.timer) ctx.store.setTimerStart(ms, now); else ui.plannedStart = clampStart(ms, now);
+}
+
 export function timerHTML() {
   const S = ctx.S, running = !!S.timer, pomoOn = P.isActive(S.pomo);
   const type = draftType(S.draft);
   const g = gate("timer", S.draft);
   const startHint = pomoOn ? "A Pomodoro fut, előbb állítsd le." : g.text;
   const elapsed = running ? Math.floor((ctx.now() - S.timer.startMs) / 1000) : 0;
-  let h = fieldsHTML() + `<section class="card timer"><div class="clockrow"><span class="pulse ${running ? "on" : ""}"></span><span class="clock" id="clock">${formatClock(elapsed)}</span></div>`;
+  let h = fieldsHTML() + `<section class="card timer">${startRowHTML(running)}<div class="clockrow"><span class="pulse ${running ? "on" : ""}"></span><span class="clock" id="clock">${formatClock(elapsed)}</span></div>`;
   if (running) {
     const hint2 = gate("manual", S.draft).text;
     h += `<div class="btnrow">${bigBtn("stop", "timerStop", "stop", "Stop és mentés", !ctx.store.fieldsComplete(), "gateBtn")}<button class="linkbtn" data-action="timerDiscard">Elvetés</button></div>${hint(hint2)}`;
@@ -138,12 +163,19 @@ const clampStep = (v, d, lo, hi) => Math.min(hi, Math.max(lo, v + d));
 const RANGES = { work: [1, 180], short: [1, 60], long: [1, 120], every: [2, 12] };
 
 export const actions = {
-  timerStart() { if (!ctx.store.startTimer(ctx.now())) ctx.say("Töltsd ki a kötelező mezőket.", true); },
+  timerStart() {
+    if (!ctx.store.startTimer(ctx.now(), ui.plannedStart)) ctx.say("Töltsd ki a kötelező mezőket.", true); else ui.plannedStart = null;
+  },
+  timerBack(el) {
+    const ms = ctx.now() - Number(el.dataset.min) * 60000;
+    if (ctx.S.timer) ctx.store.setTimerStart(ms, ctx.now()); else ui.plannedStart = clampStart(ms, ctx.now());
+  },
+  timerNowStart() { if (ctx.S.timer) ctx.store.setTimerStart(ctx.now(), ctx.now()); else ui.plannedStart = null; },
   timerStop() {
     const e = ctx.store.stopTimer(ctx.now());
     ctx.say(e ? `Mentve: ${e.typeLabel}, ${formatHM(e.durationSeconds)}.` : "Töltsd ki a kötelező mezőket a mentéshez.", !e);
   },
-  timerDiscard() { if (confirm("Elveted a futó időmérést?")) ctx.store.discardTimer(); },
+  timerDiscard() { if (confirm("Elveted a futó időmérést?")) { ctx.store.discardTimer(); ui.plannedStart = null; } },
   pomoStart() { askNotifications(); if (!ctx.store.startPomo(ctx.now())) ctx.say("Töltsd ki a kötelező mezőket.", true); },
   pomoStop() { const e = ctx.store.stopPomo(ctx.now()); if (e) ctx.say(`Mentve: ${e.typeLabel}, ${formatHM(e.durationSeconds)}.`); },
   pomoDiscard() { if (confirm("Elveted a futó pomót?")) ctx.store.discardPomo(); },

@@ -67,7 +67,7 @@ function attendanceCard(s) {
 function placesCard(s) {
   const list = ctx.S.places.map((p) => `<div class="listrow"><span>${esc(p)}</span><span class="grow"></span><button class="iconbtn sm" data-action="placeRemove" data-name="${esc(p)}" title="Törlés a listából">${icon("trash", 1)}</button></div>`).join("");
   return card("Székhely és helyszínek", `<label class="f"><span>Székhely</span><input type="text" data-ns="set" data-field="home" value="${esc(s.home)}" placeholder="pl. Pécs" autocomplete="off"></label>
-    <p class="small mut">Az Utazás Indulás és Érkezés mezőjének alapértéke, és a Költségelszámolás útvonalainak kiindulópontja.</p><hr>
+    <p class="small mut">Az Utazás Kiindulás mezőjének alapértéke, és a Költségelszámolás útvonalainak kiindulópontja.</p><hr>
     <p class="small mut">Mentett helyszínek</p>${list || `<p class="small mut">Még nincs mentett helyszín.</p>`}
     <div class="addrow"><input type="text" id="newPlace" data-ns="ui" data-field="newPlace" value="${esc(ui.newPlace)}" placeholder="Új helyszín" autocomplete="off"><button class="btn small" data-action="placeAdd">Hozzáad</button></div>
     <p class="small mut">Rögzítéskor az új helyszín magától bekerül a listába. A törlés a már rögzített bejegyzéseket nem érinti.</p>`);
