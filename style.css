@@ -323,7 +323,19 @@ button.cp:hover { background: color-mix(in srgb, var(--ac) 14%, transparent); co
 /* Időzítő: korábbi kezdés; Utazás: Munkahely-választó és Oda-vissza */
 .startrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s3); }
 .startrow input[type="time"] { width: 96px; }
-.chip { border: 1px solid var(--line, rgba(128,128,128,.35)); background: var(--field); border-radius: 999px; padding: 3px 10px; font-size: var(--t-sm); cursor: pointer; }
-.chip[aria-pressed="true"] { background: linear-gradient(135deg, var(--ac), var(--ac2)); color: #fff; border-color: transparent; font-weight: 600; }
+.startchip { border: 1px solid var(--line, rgba(128,128,128,.35)); background: var(--field); border-radius: 999px; padding: 3px 10px; font-size: var(--t-sm); cursor: pointer; }
+.startchip[aria-pressed="true"] { background: linear-gradient(135deg, var(--ac), var(--ac2)); color: #fff; border-color: transparent; font-weight: 600; }
 .travelopts { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s3); margin-bottom: var(--s3); }
 .travelopts .radios { display: flex; align-items: center; gap: 12px; }
+
+/* Szabadnap egy kattintással a kitöltetlen napok listájában */
+.chipwrap { display: inline-flex; align-items: center; gap: 2px; }
+.chipoff { border: 0; background: transparent; border-radius: 999px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--mut); cursor: pointer; }
+.chipoff:hover { background: var(--field); color: var(--ac); }
+
+/* Javaslatok gépelés közben */
+.suggestbox { position: absolute; z-index: 60; max-width: 420px; background: var(--card); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; }
+.suggestbox[hidden] { display: none; }
+.sugg { padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: var(--t-md); }
+.sugg:hover, .sugg.on { background: color-mix(in srgb, var(--ac) 14%, transparent); color: var(--ac); }
+.menu-group { padding: 6px 10px 2px; font-size: var(--t-xs); color: var(--mut); text-transform: uppercase; letter-spacing: .04em; }

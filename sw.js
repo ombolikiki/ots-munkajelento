@@ -1,11 +1,11 @@
 // Offline működés: az alkalmazás fájljait gyorsítótárazza (az adatok a böngésző tárhelyén és az adatmappában vannak, nem itt).
-const CACHE = "ots-web-v9";
+const CACHE = "ots-web-v10";
 const FILES = [
   "./", "./index.html", "./style.css", "./adatvedelem.html", "./felhasznalasi-feltetelek.html", "./manifest.webmanifest", "./skill/bundle.json",
   "./src/main.js", "./src/app.js", "./src/calendarAuth.js", "./src/calendarConfig.js", "./src/calendarSources.js", "./src/attendance.js", "./src/calendar.js", "./src/calendarParser.js", "./src/calendarSync.js", "./src/csv.js", "./src/dates.js", "./src/entries.js", "./src/folder.js", "./src/insights.js",
-  "./src/manual.js", "./src/pomodoro.js", "./src/skill.js", "./src/store.js", "./src/types.js",
+  "./src/manual.js", "./src/pomodoro.js", "./src/skill.js", "./src/store.js", "./src/suggest.js", "./src/types.js",
   "./src/ui/calendar-view.js", "./src/ui/calendar-ui.js", "./src/ui/capture.js", "./src/ui/ctx.js", "./src/ui/fields.js", "./src/ui/icons.js", "./src/ui/lower.js",
-  "./src/ui/ots.js", "./src/ui/settings.js", "./src/ui/skill-wizard.js", "./src/ui/sound.js", "./src/ui/util.js",
+  "./src/ui/ots.js", "./src/ui/settings.js", "./src/ui/skill-wizard.js", "./src/ui/sound.js", "./src/ui/suggest-ui.js", "./src/ui/util.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png",
 ];
 

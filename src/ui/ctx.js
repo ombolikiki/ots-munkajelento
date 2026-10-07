@@ -15,4 +15,4 @@ export const ui = {
   cal: { calendars: [], busy: false, error: null, needsLogin: {}, lastAuto: 0, resolve: null, helpOpen: false },
 };
 
-export const ctx = { store: null, S: null, render: () => {}, say: () => {}, now: () => Date.now() };
+export const ctx = { store: null, S: null, render: () => {}, say: () => {}, now: () => Date.now(), refreshGate: () => {} };

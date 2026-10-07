@@ -186,7 +186,7 @@ export function otsHTML() {
     <div class="monthnav"><button class="iconbtn" data-action="otsMonth" data-d="-1" aria-label="Előző hónap">${icon("chevL")}</button><strong>${esc(formatMonth(ui.ots.y, ui.ots.m))}</strong>
     <button class="iconbtn" data-action="otsMonth" data-d="1" aria-label="Következő hónap" ${canForward() ? "" : "disabled"}>${icon("chevR")}</button></div></div>
     <div class="mtool"><div class="seg">${VIEWS.map(([id, label]) => `<button data-action="otsSet" data-key="otsView" data-value="${id}" aria-pressed="${view === id}">${label}</button>`).join("")}</div>
-    ${ds === "work" ? `<label class="check small" title="8 órára kiegészítés az Ügyintézésben (hétköznap), !!! jelölés, üres napok kitöltése. Kikapcsolva a rögzített adatok szerepelnek, kiegészítés nélkül."><input type="checkbox" data-ns="set" data-field="otsRules" data-type="bool" ${s.otsRules ? "checked" : ""}> A skill szabályai szerint</label>` : ""}</div></div>
+    ${ds === "work" ? `<label class="check small" title="Az üres napokat (hétköznap, szombat, vasárnap) !!! jelöli. Kikapcsolva csak a rögzített napok látszanak. A skill nem egészít ki 8 órára."><input type="checkbox" data-ns="set" data-field="otsRules" data-type="bool" ${s.otsRules ? "checked" : ""}> Üres napok jelölése (!!!)</label>` : ""}</div></div>
     <div class="modalbody" data-keep-scroll="ots">${body}</div>
     <div class="modalfoot">${ui.ots.copied ? `<span class="acc">${icon("copy", 1)} Másolva: ${esc(ui.ots.copied)}</span>` : `<span class="mut">${HINTS[ds]}</span>`}<span class="grow"></span><span class="mut">${progress()}</span></div>`;
 }

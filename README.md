@@ -43,3 +43,10 @@ Sima JavaScript, függőség nélkül (ES modulok). Logika: `src/dates.js` (véd
 
 ## Amit nem láttunk élesben
 A Windowst, a Chrome valódi mappaválasztóját (és a tiltott mappákat), a Chrome engedély-újrakérését és a skill kiírását a `.claude`/`.agents` mappákba itt nem lehet kipróbálni; a logikát tesztek (hamis mappával), a valódi böngészős mappa-írást a beépített böngészőben a böngésző saját (OPFS) mappájával ellenőriztük.
+
+## Mac 1.5.1–1.5.6 átvezetése
+- **Hétvége és üres napok:** szombaton és vasárnap nincs napi óraszám, de az üres hétvégi nap jelez (piros pont, kitöltetlen napok). A Havi munkajelentő az üres napra (vasárnapra is) `!!!`-t ad (kapcsoló: „Üres napok jelölése (!!!)”), nincs 8-ra kiegészítés. A skill-csomag (`skill/bundle.json`) ennek megfelelően frissült.
+- **Havi korlát:** legfeljebb annyi szabadnap és annyi munkaszüneti nap lehet egy hónapban, ahány hétből áll a hónap; átlépéskor figyelmeztetés (a rögzítést nem akadályozza).
+- **Szabadnap egy kattintással:** a kitöltetlen napok listájában a nap mellett a hold gomb, a fejlécben a „Vasárnapok → szabadnap” gomb; csak üres, múltbeli napot jelöl.
+- **Javaslatok gépelés közben** (Beállítások › Székhely és helyszínek, alapból bekapcsolt): Munkahely, Kiindulás, Cél, Tevékenység típusa, Tevékenység. Fel/Le lépked, Enter a kijelöltet fogadja el, Tab a kijelöltet vagy az elsőt, Esc bezár. A típusmező nyila a teljes csoportosított listát nyitja.
+- **Skill-frissítés jelzése:** a webes telepítő a jelölőfájlba (`.ots-tracker-install.json`) ugyanúgy beleírja a lenyomatot (`fingerprint`), de a böngésző nem látja a telepített skillt, ezért a jelzés a Mac-appban van; a webes telepítő új csomagot ír fel.

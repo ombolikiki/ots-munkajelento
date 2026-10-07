@@ -1,6 +1,7 @@
 // Az alkalmazás állapota és tárolása. A böngésző tárhelye (localStorage) a gyorsítótár; ha az adatmappa ki van választva,
 // a bejegyzések, a létszámjelentések és a mutatófájl automatikusan a mappába is íródnak (lásd folder.js).
-import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft, migrateDraft, clampStart } from "./entries.js";
+import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft, migrateDraft, clampStart, wholeDayEntry } from "./entries.js";
+import { parseYMD } from "./dates.js";
 import { isWholeDay, configureTypes, lookupByCode, BUILTIN_TYPES, makeCustomCode, normalizeHex, UNIT } from "./types.js";
 import { encodeBytes, decode } from "./csv.js";
 import * as ATT from "./attendance.js";
@@ -29,7 +30,7 @@ export const DEFAULT_SETTINGS = {
   pomo: P.POMO_DEFAULTS, soundPomoEnd: "glass", soundBreakEnd: "ping", notifications: true,
   attendanceEnabled: false, congregations: [],
   customCategories: [], hiddenTypes: [], categoryColors: {},
-  otsRules: false, otsDataset: "work", otsView: "table",
+  suggestions: true, otsRules: false, otsDataset: "work", otsView: "table",
   dataPath: "",
   syncEnabled: false, syncCalendars: [], syncDays: 60, syncDismissed: [],
   skill: { userName: "", site: "det", home: "", congregations: "", tasks: [], targets: ["claude"], os: "" },
@@ -69,7 +70,7 @@ export function sanitizeSettings(raw) {
     notifications: r.notifications === undefined ? d.notifications : !!r.notifications,
     attendanceEnabled: !!r.attendanceEnabled, congregations: ATT.cleanCongregations(r.congregations),
     customCategories: custom, hiddenTypes: hidden, categoryColors: colors,
-    otsRules: !!r.otsRules, otsDataset: oneOf(r.otsDataset, OTS_DATASETS, d.otsDataset), otsView: oneOf(r.otsView, OTS_VIEWS, d.otsView),
+    suggestions: r.suggestions === undefined ? d.suggestions : !!r.suggestions, otsRules: !!r.otsRules, otsDataset: oneOf(r.otsDataset, OTS_DATASETS, d.otsDataset), otsView: oneOf(r.otsView, OTS_VIEWS, d.otsView),
     dataPath: str(r.dataPath),
     syncEnabled: !!r.syncEnabled, syncCalendars: strList(r.syncCalendars), syncDays: int(r.syncDays, 1, 730, d.syncDays), syncDismissed: strList(r.syncDismissed),
     skill: {
@@ -250,6 +251,18 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       const ok = write(KEYS.entries, state.entries);
       scheduleFlush();
       return ok;
+    },
+    /**
+     * Egész napos Szabadnap bejegyzés egy ÜRES, MÚLTBELI napra (a kitöltetlen napok listájából). Visszatér {ok, entry} vagy {ok:false, error}.
+     * Jövőbeli napot, olyat, amelyen már van bejegyzés, és ugyanazt a napot kétszer nem jelöli.
+     */
+    markDayOff(day, today = todayYMD()) {
+      if (!parseYMD(day)) return { ok: false, error: "Érvénytelen nap." };
+      if (day >= today) return { ok: false, error: "Jövőbeli vagy mai napot nem lehet szabadnapnak jelölni." };
+      if (state.entries.some((e) => e.date === day)) return { ok: false, error: "Erre a napra már van bejegyzés." };
+      const entry = wholeDayEntry({ ...emptyDraft(), typeCode: "DAY_OFF" }, day);
+      api.addEntry(entry);
+      return { ok: true, entry };
     },
     deleteEntry(id) {
       state.entries = state.entries.filter((e) => e.id !== id);

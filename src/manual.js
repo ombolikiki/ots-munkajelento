@@ -1,7 +1,7 @@
 // Kézi felvitel az OTS-be: számítások (a natív app OTSManual megfelelője, a skill szabályaival egyezően:
 // napi összegzés típusonként, a napi óraösszeg felfelé kerekítése, fő/alkalom darabszám, Munkahely lista).
 import { UNIT, lookupByCode, isCustomCode, isTravel } from "./types.js";
-import { monthDays, isSaturday, isSunday, parseYMD } from "./dates.js";
+import { monthDays, parseYMD } from "./dates.js";
 import { dueDatesBetween } from "./dates.js";
 import { place, fold } from "./calendarParser.js";
 
@@ -77,8 +77,8 @@ export function workplaceList(entries) {
 
 /**
  * Egy nap sora a Havi munkajelentőben.
- * rules: a skill kiegészítő szabályai (hétköznap 8 órára kiegészítés az Ügyintézésben, `!!!` jelölés, üres napok:
- * hétköznap és szombat `!!!`, vasárnap SZABADNAP). Szombaton a kiegészítés nem érvényes.
+ * rules: az üres napok jelölése (`!!!`; hétköznap, szombat és vasárnap is). A skill nem egészít ki 8 órára: azt írja be, amit a tracker rögzített.
+ * A szabadnapot a Szabadnap bejegyzés jelöli (SZABADNAP).
  */
 export function workRow(day, dayEntries, rules, today) {
   const row = { key: day, workplace: "", holiday: false, values: {}, hasData: false, notes: [] };
@@ -96,8 +96,8 @@ export function workRow(day, dayEntries, rules, today) {
 
   if (!timed.length) {
     if (rules) {   // OTS-szempontból üres nap
-      row.workplace = isSunday(day) ? "SZABADNAP" : "!!!";
-      row.notes.push(isSunday(day) ? "üres vasárnap: SZABADNAP" : "üres nap: !!! jelölés");
+      row.workplace = "!!!";
+      row.notes.push("üres nap: !!! jelölés");
     }
     return row;
   }
@@ -118,23 +118,8 @@ export function workRow(day, dayEntries, rules, today) {
     }
   }
 
-  let places = workplaceList(timed);
-  if (rules && !isSaturday(day)) {
-    const total = Object.values(values).reduce((a, b) => a + b, 0);
-    if (total < MAX_VALUE) {
-      const add = MAX_VALUE - total;
-      values.OFFICE_WORK = (values.OFFICE_WORK || 0) + add;
-      row.notes.push(`Ügyintézés +${add} (8-ra kiegészítve)`);
-    }
-    if ((values.OFFICE_WORK || 0) > 4) {
-      places = ["!!!", ...places];
-      row.notes.push("!!! jelölés: az Ügyintézés több mint 4 óra");
-    }
-  }
-  if (places[0] === "!!!") {   // a !!! előtag a Munkahely mező elején áll (pl. "!!! Győr")
-    places = places.slice(1);
-    row.workplace = places.length ? "!!! " + places.join(", ") : "!!!";
-  } else row.workplace = places.join(", ");
+  const places = workplaceList(timed);
+  row.workplace = places.join(", ");
   row.values = Object.fromEntries(Object.entries(values).filter(([, v]) => v > 0));
   return row;
 }

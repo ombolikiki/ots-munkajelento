@@ -46,7 +46,7 @@ function calendarCard(s) {
 
 function remindersCard(s) {
   return card("Emlékeztetők és jelzések", `<label class="f"><span>Kitöltetlen napok ellenőrzése</span><select data-ns="set" data-field="lookback">${LOOKBACKS.map((l) => `<option value="${l}" ${s.lookback === l ? "selected" : ""}>${LOOKBACK_TITLES[l]}</option>`).join("")}</select></label>
-    <p class="small mut">A vasárnapot is ellenőrzi, a mai napot nem számolja. A szabadság, szabadnap és munkaszüneti nap kitöltött napnak számít.</p><hr>
+    <p class="small mut">A vasárnapot is ellenőrzi, a mai napot nem számolja. A szabadság, szabadnap és munkaszüneti nap kitöltött napnak számít. Hétvégén nincs napi óraszám (bármilyen bejegyzés elég), de az üres szombat és vasárnap jelez.</p><hr>
     ${toggle("reminderEnabled", s.reminderEnabled, "Piros emlékeztető sáv, ha régen nem volt munkajelentő")}
     ${s.reminderEnabled ? `<div class="setrow"><span>Ennyi egymást követő kitöltetlen nap után</span>${stepper("reminderDays", s.reminderDays, 2, 60)}</div>` : ""}<hr>
     <div class="setrow"><span>Napi elvárt óraszám (hétfőtől péntekig)</span>${stepper("targetHours", s.targetHours, 1, 16)}</div>
@@ -70,7 +70,9 @@ function placesCard(s) {
     <p class="small mut">Az Utazás Kiindulás mezőjének alapértéke, és a Költségelszámolás útvonalainak kiindulópontja.</p><hr>
     <p class="small mut">Mentett helyszínek</p>${list || `<p class="small mut">Még nincs mentett helyszín.</p>`}
     <div class="addrow"><input type="text" id="newPlace" data-ns="ui" data-field="newPlace" value="${esc(ui.newPlace)}" placeholder="Új helyszín" autocomplete="off"><button class="btn small" data-action="placeAdd">Hozzáad</button></div>
-    <p class="small mut">Rögzítéskor az új helyszín magától bekerül a listába. A törlés a már rögzített bejegyzéseket nem érinti.</p>`);
+    <p class="small mut">Rögzítéskor az új helyszín magától bekerül a listába. A törlés a már rögzített bejegyzéseket nem érinti.</p><hr>
+    ${toggle("suggestions", s.suggestions, "Javaslatok gépelés közben (helyek, típus, korábbi tevékenységek)")}
+    <p class="small mut">Kikapcsolva a Tevékenység típusa a régi legördülő lista.</p>`);
 }
 
 const UNIT_NAMES = { hours: "óra", occasions: "alkalom", people: "fő" };

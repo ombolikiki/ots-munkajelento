@@ -6,6 +6,7 @@ import * as P from "../pomodoro.js";
 import { ctx, ui } from "./ctx.js";
 import { esc, $, timeValue } from "./util.js";
 import { clampStart } from "../entries.js";
+import { monthLimitWarning } from "../insights.js";
 import { icon } from "./icons.js";
 import { fieldsHTML } from "./fields.js";
 import { askNotifications } from "./sound.js";
@@ -25,10 +26,10 @@ function startRowHTML(running) {
   const startMs = running ? S.timer.startMs : ui.plannedStart;
   const isNow = !running && ui.plannedStart == null;
   const val = startMs == null ? "" : timeValue(new Date(startMs));
-  const chips = START_MINUTES.map((m) => `<button type="button" class="chip" data-action="timerBack" data-min="${m}" title="A kezdés ${m} perccel korábbi">−${m}</button>`).join("");
+  const chips = START_MINUTES.map((m) => `<button type="button" class="startchip" data-action="timerBack" data-min="${m}" title="A kezdés ${m} perccel korábbi">−${m}</button>`).join("");
   return `<div class="startrow"><span class="mut small">Kezdés</span>
     <input type="time" data-ns="tstart" data-field="start" value="${esc(val)}" aria-label="Kezdés (óó:pp)" title="Legfeljebb a mai nap elejéig mehet vissza, jövőbeli nem lehet">
-    <button type="button" class="chip" data-action="timerNowStart" aria-pressed="${isNow}" title="A kezdés a pillanatnyi idő">Most</button>${chips}</div>`;
+    <button type="button" class="startchip" data-action="timerNowStart" aria-pressed="${isNow}" title="A kezdés a pillanatnyi idő">Most</button>${chips}</div>`;
 }
 
 /** A Kezdés mező értéke (óó:pp) -> az Időzítő kezdése a mai napon. */
@@ -196,6 +197,8 @@ export const actions = {
     const r = manualResult();
     if (!r.ok) { ctx.say(r.error, true); return; }
     ctx.store.addEntry(linkResolved(r.entry)); ctx.store.resetDraft();
+    const warn = monthLimitWarning(ctx.S.entries, r.entry);
+    if (warn) ctx.say(warn, true, 15000);
     ui.manual.hours = 1; ui.manual.minutes = 0; ui.manual.message = "✓ Mentve";
     setTimeout(() => { ui.manual.message = null; ctx.render(); }, 2500);
   },

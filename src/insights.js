@@ -1,5 +1,5 @@
 import { UNIT, isCustomCode } from "./types.js";
-import { addDays, isWeekday, parseYMD, monthStart, shiftMonth, ymd } from "./dates.js";
+import { addDays, isWeekday, parseYMD, monthStart, shiftMonth, ymd, daysInMonth } from "./dates.js";
 
 /** Az összesítésben beszámított másodperc: az óra típusoknál az időtartam, a fő és az alkalom darabonként 1 óra. */
 export function creditSeconds(e) {
@@ -15,11 +15,37 @@ export function officialSeconds(entries) {
 
 export const hasWholeDay = (entries) => entries.some((e) => e.unit === UNIT.WHOLE_DAY);
 
-/** exempt | reached | inProgress | short */
+/**
+ * exempt | reached | inProgress | short. Hétköznap a napi óraszám számít; szombaton és vasárnap nincs napi óraszám (bármilyen bejegyzés elég),
+ * de az üres szombat és vasárnap jelez (a vasárnap sem „magától szabadnap”: a szabadnapot Szabadnap bejegyzés jelöli).
+ */
 export function targetState(day, entries, today, targetHours) {
-  if (day > today || !isWeekday(day) || hasWholeDay(entries)) return "exempt";
+  if (day > today || hasWholeDay(entries)) return "exempt";
+  if (!isWeekday(day)) return entries.length ? "exempt" : day === today ? "inProgress" : "short";
   if (officialSeconds(entries) >= Math.max(1, targetHours) * 3600) return "reached";
   return day === today ? "inProgress" : "short";
+}
+
+/**
+ * Hány hétből áll a hónap: a napok száma 7-tel osztva, felfelé kerekítve (28 nap = 4, 29–31 nap = 5). Ennyi SZABADNAP és ennyi MUNKASZÜNETI NAP
+ * lehet legfeljebb egy hónapban (az OTS lezárás előtt ellenőrzi). Érvénytelen hónapra 5.
+ */
+export function weeksInMonth(y, m) {
+  const n = Number.isInteger(y) && Number.isInteger(m) && m >= 1 && m <= 12 && y >= 1 ? daysInMonth(y, m) : 30;
+  return Math.ceil(n / 7);
+}
+
+/** Figyelmeztetés, ha a (már felvett) egész napos bejegyzés hónapjában az azonos típusú bejegyzések száma meghaladja a havi korlátot; egyébként null. */
+export function monthLimitWarning(entries, entry) {
+  if (!entry || (entry.type !== "DAY_OFF" && entry.type !== "PUBLIC_HOLIDAY")) return null;
+  const p = parseYMD(entry.date);
+  if (!p) return null;
+  const prefix = entry.date.slice(0, 7);
+  const days = new Set(entries.filter((e) => e.type === entry.type && e.date.startsWith(prefix)).map((e) => e.date)).size;
+  const limit = weeksInMonth(p.y, p.m);
+  if (days <= limit) return null;
+  const name = entry.type === "DAY_OFF" ? "szabadnap" : "munkaszüneti nap";
+  return `Figyelem: ebben a hónapban ${days} ${name} van, az OTS legfeljebb ${limit}-t enged (a hónap heteinek száma). A hónap lezárása előtt javítani kell.`;
 }
 
 /** A hónap eleje és a tegnap közötti napok, amelyekhez nincs bejegyzés (a vasárnapot is beleértve). */

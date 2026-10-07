@@ -27,19 +27,12 @@ Amikor a feladat lefutott (a hónap lezárva, vagy nem volt Havi munkajelentő h
 
 Röviden foglald össze, mit végeztél el (melyik hónap). Ezután kérdezd meg a felhasználót, hogy mivel folytassuk.
 
-## Napi kiegészítő szabályok (a sor kitöltése után, soronként)
+## Napi szabályok (a sor kitöltése után, soronként)
 
-1. **8-ra kiegészítés:** ha egy sorba beírt számok összege **kisebb, mint 8**, add hozzá az **Ügyintézés (óra)** mezőben lévő számhoz annyit, hogy a sor összege 8 legyen. Ha az összeg már **8 vagy több**, ne nyúlj hozzá.
-2. **Jelölés:** ha így az Ügyintézés mezőben lévő szám **nagyobb, mint 4**, tegyél a **Munkahely** mező szövegének elejére egy `!!!` előtagot (a felhasználó ezt később maga szerkeszti).
+1. **Kerekítés:** ha a napi összeg (óra) nem kerek egész óra, mindig **felfelé kerekítve** írd be a táblázatba (pl. 2,5 óra = 3, 1,25 óra = 2).
+2. **Maximum 8:** minden számmezőben (óra, alkalom és fő is) a beírt érték legfeljebb **8** lehet. Ha a tracker adatai alapján (a napi összegzés és a felfelé kerekítés után) 8-nál nagyobb szám jönne ki, csak **8**-at írj be.
 
-3. **Kerekítés:** ha a napi összeg (óra) nem kerek egész óra, mindig **felfelé kerekítve** írd be a táblázatba (pl. 2,5 óra = 3, 1,25 óra = 2).
-4. **Szombat kivétel:** az 1. és 2. szabály (8-ra kiegészítés és `!!!` jelölés) **szombaton nem érvényes**. A szombati sor lehet 8 óránál kevesebb, és az Ügyintézésből eredő `!!!` előtagot sem kell rátenni. A szombat azonosítása: a sor napja "Szo" (az OTS Nap oszlopában), vagy a dátum szombati.
-5. **Maximum 8:** minden számmezőben (óra, alkalom és fő is) a beírt érték legfeljebb **8** lehet. Ha a tracker adatai alapján (a napi összegzés és a felfelé kerekítés után) 8-nál nagyobb szám jönne ki, csak **8**-at írj be. A felső korlátozást a 8-ra kiegészítés és a `!!!` jelölés számításánál is a már korlátozott értékekkel vedd figyelembe.
-
-Az alábbi értelmezéseket a felhasználó megerősítette:
-- A sor összegébe az összes beírt szám beletartozik (óra, alkalom és fő mezők is, egységtől függetlenül).
-- A szabályt csak olyan sorokra alkalmazom, amelyekhez a trackerben tényleg van bejegyzés. **Nem** alkalmazom az üres napokra, a SZABADNAP, SZABADSÁG és MUNKASZÜNETI NAP sorokra (ezeknek a többi mezője üres marad).
-- Ha a Munkahely mező üres, az előtag egyedül `!!!` lesz.
+A sorokat **nem egészítjük ki** 8 órára: azt írd be, amit a tracker rögzített. A napi 8 órát a felhasználó a trackerben figyeli (a napi 8 óra jelzése), a hiányzó órákat ott kell pótolni, nem a skill teszi hozzá.
 
 ## Az OTS lap (Határidők > Havi munkajelentő sor duplán kattintva, vagy Lelkész > Havi munkajelentő)
 
@@ -70,14 +63,14 @@ A "Látogatás" kétszer szerepel: a Gyülekezet csoportban (VISITING) és a Mis
 
 Az adatok a felhasználó **OTS Munkajelentő Tracker** alkalmazásának adatfájljából jönnek. Az adatfájl megkeresését és az oszlopok jelentését lásd: **references/tracker-adatforras.md** (olvasd el, mielőtt adatot olvasol). Ez a Havi munkajelentő **egyetlen adatforrása**.
 
-**Leképezés az OTS táblázatra** (a napi szabályok, kerekítés, 8-ra kiegészítés, `!!!`, szombat stb. változatlanul érvényesek, lásd lent):
+**Leképezés az OTS táblázatra** (a napi szabályok, a kerekítés, a 8-as maximum, az üres napok és a szombat/vasárnap szabályai érvényesek, lásd lent):
 - `Egység = ora`: a nap azonos `Típus kód` értékű bejegyzéseinek időtartam-összege (lásd fent) / 3600, majd felfelé kerekítve (a kerekítés a napi összegre vonatkozik).
 - **Pomodoro-bejegyzések** (`Forrás = pomodoro`): egy nap azonos `Típus kód` alá eső pomóinak (és az ugyanide tartozó időzítős/kézi bejegyzéseknek) az időtartamát **először add össze másodpercben**, és **csak az így kapott napi összeget kerekítsd felfelé egész órára**, közvetlenül az OTS-be írás előtt. A pomókat külön-külön **soha ne kerekítsd** (25 perc/pomo ≠ 1 óra/pomo). Példa: 4 pomo × 25 perc = 100 perc = 1,67 óra, amit 2 órára kerekítesz, nem 4-re.
-- Az alkalom és a fő is 1 órának számít a sor összegében (a 8-ra kiegészítésnél és a 8 órás korlátnál), a tracker napi összesítője is így számol.
+- A tracker napi összesítője az alkalmat és a főt 1-1 órának számítja; az OTS-be viszont a saját mezőjükbe darabszámként kerülnek.
 - `Egység = alkalom` vagy `fo`: a nap azonos `Típus kód` értékű bejegyzéseinek `Mennyiség` összege (nincs kerekítés, nincs időből számolás).
 - `DAY_OFF` (`Típus kód`): Munkahely = `SZABADNAP`, a sor többi része üres. `PUBLIC_HOLIDAY`: Munkahely = `MUNKASZÜNETI NAP`, a többi üres. `HOLIDAY`: a **Szabadság?** jelölőnégyzetet pipáld ki, semmi mást ne írj a sorba.
 - **Munkahely mező:** a nap bejegyzéseinek (az egész napos és az `EGYEDI_` kódú bejegyzések nélkül) különböző `Munkahely` értékei (utazásnál a Munkahely(ek) elemei; az `Indulás` és az `Érkezés` nem kerül ide, kivéve ha a `Munkahely helye` oszlop értéke `indulás`: akkor az Utazás munkahelye az `Indulás`, és a `Munkahely` oszlop elemei nem kerülnek ide), időrendben, vesszővel elválasztva (pl. `Település1, Település2`). A `!!!` szabályok (üres nap stb.) változatlanok. A tracker kötelezővé teszi a Munkahely mezőt, ezért itt nem kell településnevet keresni a leírásban.
-- Ha egy napnak nincs bejegyzése, a korábbi üres-nap szabályok érvényesek (hétköznap és szombat: `!!!`, vasárnap: `SZABADNAP`).
+- Ha egy napnak nincs bejegyzése, az üres-nap szabály érvényes: **hétköznap, szombat és vasárnap is `!!!`** (lásd lent: Üres napok).
 
 ## Nem munkaidős bejegyzések
 
@@ -92,7 +85,7 @@ Az adott nap bejegyzéseinek (az egész napos és az `EGYEDI_` kódú bejegyzés
 
 ## Üres napok
 
-Ha egy napra nincs bejegyzés a trackerben, a sor többi mezőjét hagyd üresen, a **Munkahely** mezőbe pedig írj egy `!!!` előtagot (egyedül `!!!`). A felhasználó tölti ki a sort. A 8-ra kiegészítés az ilyen napokra nem vonatkozik. (Mivel a lezárás előtti ellenőrzés a `!!!`-t hibának tekinti, a lezárás addig nem lehetséges, amíg a felhasználó ezeket ki nem javítja.)
+Ha egy napra nincs bejegyzés a trackerben, a sor többi mezőjét hagyd üresen, a **Munkahely** mezőbe pedig írj egy `!!!` előtagot (egyedül `!!!`). A felhasználó tölti ki a sort. Ez **minden napra** érvényes: hétköznapra, szombatra és **vasárnapra is** (a vasárnapot sem veszed magadtól szabadnapnak: lehet, hogy aznap más tevékenység volt). Ha a felhasználó szabadnapot tartott, a trackerben **Szabadnap** bejegyzést rögzít, és akkor a `DAY_OFF` szabály szerint `SZABADNAP` kerül a sorba. (Mivel a lezárás előtti ellenőrzés a `!!!`-t hibának tekinti, a lezárás addig nem lehetséges, amíg a felhasználó ezeket ki nem javítja.)
 
 ## Bevitel az OTS táblázatba (tapasztalat)
 
@@ -101,11 +94,11 @@ Ha egy napra nincs bejegyzés a trackerben, a sor többi mezőjét hagyd üresen
 - **Figyelem, az oszlopok helye eltolódhat** (pl. az oldalsáv összecsukódik), ezért a koordináta alapú duplakattintás rossz cellába írhat. Ez egyszer megtörtént: a `!!!` az Istentisztelet mezőbe került. A bevitel megbízhatóbb módja a grid API-n át: `g.editCell(id,'WORKPLACE'); const n=g.getEditor().getInputNode(); n.value='...'; g.editStop();` (`id` = `g.serialize()[sorindex].id`). Minden bevitel után ellenőrizd az egész sort (`serialize()`), hogy más mezőbe nem került-e érték.
 - A `<` és `>` jelet tartalmazó szöveg a lapon HTML-ként értelmeződik és láthatatlan lehet. Ezért használunk `!!!` előtagot.
 
-## Megerősített kiegészítések (kerekítés, üres szombat, vasárnap)
+## Megerősített kiegészítések (kerekítés, üres szombat és vasárnap)
 
 - A kerekítést mezőnként, a **napi összegre** alkalmazd (pl. ugyanazon a napon két Felkészülés bejegyzést előbb add össze, majd az összeget kerekítsd felfelé), nem bejegyzésenként. (Felhasználó megerősítette.)
-- **Üres szombat** (nincs bejegyzés): a Munkahely mezőbe `!!!` kerül, mint bármely más üres napon. (Felhasználó megerősítette.)
-- **Vasárnap:** ha nincs semmi bejegyzés, a Munkahely mezőbe `SZABADNAP` kerül, a sor többi mezője üres marad (nem `!!!`). Ha van bejegyzés, a hétköznapi szabályok érvényesek. (Felhasználó megerősítette.)
+- **Üres szombat** (nincs bejegyzés): a Munkahely mezőbe `!!!` kerül, mint bármely más üres napon. Szombaton nincs napi óraszám: ha van bejegyzés (akár egyetlen Istentisztelet), azt írd be úgy, ahogy rögzítve van. (Felhasználó megerősítette.)
+- **Üres vasárnap** (nincs bejegyzés): a Munkahely mezőbe `!!!` kerül (nem `SZABADNAP`), mert lehet, hogy nem szabadnap volt, hanem más tevékenység. Szabadnapot a felhasználó **Szabadnap** bejegyzéssel jelöl. Ha van bejegyzés, azt írd be úgy, ahogy rögzítve van. (Felhasználó megerősítette, 2026-10-07; korábban az üres vasárnap `SZABADNAP` volt.)
 
 ## Heti korlát (lezárás előtti ellenőrzés)
 

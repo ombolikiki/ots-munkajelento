@@ -1,7 +1,7 @@
 // Naptár lap: heti nézet, a rögzített bejegyzések idősávként; egérrel húzva új idősáv jelölhető ki.
 import { colorFor, lookupByCode } from "../types.js";
 import { slotEntry, gate } from "../entries.js";
-import { addDays, todayYMD, startOfWeek, formatShort, dayName, dayOfMonth, formatMonth, parseYMD, hmFromMinutes, formatHM } from "../dates.js";
+import { addDays, todayYMD, startOfWeek, formatShort, dayName, dayOfMonth, formatMonth, parseYMD, hmFromMinutes, formatHM, isWeekday } from "../dates.js";
 import { targetState } from "../insights.js";
 import * as C from "../calendar.js";
 import { ctx, ui } from "./ctx.js";
@@ -37,7 +37,7 @@ export function calendarHTML() {
     const isToday = d === today, selected = d === ui.day, future = d > today;
     const st = targetState(d, byDay.get(d), today, S.settings.targetHours);
     return `<button class="dayhead ${isToday ? "today" : ""} ${selected ? "sel" : ""}" data-action="calDay" data-day="${d}" ${future ? "disabled" : ""}>
-      <span class="dn">${esc(dayName(d))}</span><span class="dd">${dayOfMonth(d)}</span><span class="dot" style="background:${stateColor(st)}" title="Nincs meg a napi ${S.settings.targetHours} óra"></span></button>`;
+      <span class="dn">${esc(dayName(d))}</span><span class="dd">${dayOfMonth(d)}</span><span class="dot" style="background:${stateColor(st)}" title="${isWeekday(d) ? `Nincs meg a napi ${S.settings.targetHours} óra` : "Üres hétvégi nap"}"></span></button>`;
   }).join("")}</div>`;
   // idő nélküli bejegyzések és a sávon kívüli jelzés
   const untimed = new Map(days.map((d) => [d, byDay.get(d).filter((e) => !e.start || !e.end)]));

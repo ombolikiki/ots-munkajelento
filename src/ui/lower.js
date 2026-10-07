@@ -1,7 +1,7 @@
 // A főablak alsó része: napi lista (8 órás jelzéssel), gyülekezeti létszámjelentő kártya, kitöltetlen napok.
 import { typeOfEntry, colorFor } from "../types.js";
-import { todayYMD, addDays, formatLong, formatChip, formatHM } from "../dates.js";
-import { officialSeconds, targetState, missingDaysFor, shortDays, groupByDate, lookbackStart, LOOKBACK_SHORT } from "../insights.js";
+import { todayYMD, addDays, formatLong, formatChip, formatHM, isSunday, isWeekday } from "../dates.js";
+import { officialSeconds, targetState, missingDaysFor, shortDays, groupByDate, lookbackStart, LOOKBACK_SHORT, monthLimitWarning } from "../insights.js";
 import { isDueDay, pendingAttendance, reportsOn, emptyReport, clampCount, MAX_COUNT } from "../attendance.js";
 import { ctx, ui } from "./ctx.js";
 import { esc, entryAmount, entryWhen, entryDetail, hm } from "./util.js";
@@ -30,7 +30,9 @@ export function dayListHTML() {
     <button class="pill ${isToday ? "" : "on"}" data-action="dayToday" ${isToday ? "disabled" : ""} title="Ugrás a mai napra">Ma</button></div>`;
   if (!items.length) {
     h += `<p class="mut small">Nincs bejegyzés erre a napra.</p>`;
-    if (state === "short") h += `<p class="small stopt"><span class="dot stopc"></span> 0:00 / ${hours}:00 – még nincs meg a napi ${hours} óra</p>`;
+    if (state === "short") h += isWeekday(day)
+      ? `<p class="small stopt"><span class="dot stopc"></span> 0:00 / ${hours}:00 – még nincs meg a napi ${hours} óra</p>`
+      : `<p class="small stopt"><span class="dot stopc"></span> Üres hétvégi nap – rögzíts tevékenységet, vagy jelöld Szabadnapnak.</p>`;
   } else {
     h += `<div class="items">${items.map((e) => {
       const sure = ui.confirmDelete === e.id;
@@ -107,10 +109,13 @@ export function missingHTML() {
     const extra = kind === "short" ? `<span class="chip-sub">${hm(officialSeconds(by.get(d) || []))}</span>` : "";
     const lead = kind === "short" ? `<span class="dot stopc"></span>` : kind === "att" ? icon("people", 0.85) : "";
     const title = kind === "missing" ? "Kitöltetlen nap" : kind === "short" ? `Nincs meg a napi ${S.settings.targetHours} óra` : "Létszámjelentő esedékes";
-    return `<button class="chip ${kind} ${selected ? "sel" : ""}" data-action="${kind === "att" ? "dayGo" : "dayFill"}" data-day="${d}" title="${title}">${lead}${esc(formatChip(d))}${extra}</button>`;
+    const main = `<button class="chip ${kind} ${selected ? "sel" : ""}" data-action="${kind === "att" ? "dayGo" : "dayFill"}" data-day="${d}" title="${title}">${lead}${esc(formatChip(d))}${extra}</button>`;
+    if (kind !== "missing") return main;
+    return `<span class="chipwrap">${main}<button class="chipoff" data-action="dayOff" data-day="${d}" title="Szabadnapnak jelölöm" aria-label="Szabadnapnak jelölöm: ${esc(formatChip(d))}">${icon("moon", 0.85)}</button></span>`;
   };
+  const sundays = missing.filter(isSunday);
   return `<section class="card missing"><div class="mhead">${icon(nothing ? "seal" : "calendar", 1.1)}<strong class="small">${esc(parts.length ? parts.join(" · ") : "Nincs kitöltetlen nap")}</strong>
-    <span class="grow"></span><span class="mut tiny">${esc(LOOKBACK_SHORT[lb] || "")}</span></div>
+    <span class="grow"></span>${sundays.length ? `<button class="linkbtn acc small" data-action="sundaysOff" title="Az összes kitöltetlen vasárnap Szabadnap lesz">Vasárnapok → szabadnap (${sundays.length})</button>` : ""}<span class="mut tiny">${esc(LOOKBACK_SHORT[lb] || "")}</span></div>
     ${nothing ? "" : `<div class="chips">${[...att].reverse().map((d) => chip(d, "att")).join("")}${[...missing].reverse().map((d) => chip(d, "missing")).join("")}${[...short].reverse().map((d) => chip(d, "short")).join("")}</div>`}</section>`;
 }
 
@@ -122,6 +127,23 @@ export const actions = {
   dayToday() { ui.day = todayYMD(); ui.confirmDelete = null; },
   dayGo(el) { ui.day = el.dataset.day; },
   dayFill(el) { ui.day = el.dataset.day; ui.mode = "manual"; ui.pending = null; },
+  dayOff(el) {
+    const r = ctx.store.markDayOff(el.dataset.day);
+    if (!r.ok) { ctx.say(r.error, true); return; }
+    ctx.say(`${formatChip(el.dataset.day)} szabadnapnak jelölve.`);
+    const w = monthLimitWarning(ctx.S.entries, r.entry);
+    if (w) ctx.say(w, true, 15000);
+  },
+  sundaysOff() {
+    const by = groupByDate(ctx.S.entries), today = todayYMD();
+    const days = missingDaysFor(new Set(by.keys()), ctx.S.settings.lookback, today).filter(isSunday);
+    const marked = [];
+    for (const d of days) { const r = ctx.store.markDayOff(d, today); if (r.ok) marked.push(r.entry); }
+    if (!marked.length) { ctx.say("Nincs megjelölhető vasárnap.", true); return; }
+    let msg = `${marked.length} vasárnap szabadnapnak jelölve.`;
+    const warned = [...new Set(marked.map((e) => monthLimitWarning(ctx.S.entries, e)).filter(Boolean))];
+    ctx.say(msg + (warned.length ? " " + warned[0] : ""), warned.length > 0, warned.length ? 15000 : undefined);
+  },
   delete(el) {
     if (ui.confirmDelete === el.dataset.id) { ctx.store.deleteEntry(el.dataset.id); ui.confirmDelete = null; } else ui.confirmDelete = el.dataset.id;
   },

@@ -176,3 +176,18 @@ test("a régi (Indulás / Munkahely(ek) / Érkezés) piszkozat átkerül az új 
   const d = createStore(st).state.draft;
   assert.equal(d.destination, "Tata, Mór"); assert.equal(d.departure, "Győr"); assert.equal(d.roundTrip, true); assert.equal("arrival" in d, false);
 });
+
+test("Szabadnap egy kattintással: csak üres, múltbeli napra, kétszer nem", () => {
+  const s = createStore(memory());
+  const today = "2026-10-08";
+  const r = s.markDayOff("2026-10-04", today);   // vasárnap
+  assert.ok(r.ok); const e = s.state.entries[0];
+  assert.ok(e.type === "DAY_OFF" && e.unit === "egesz_nap" && e.workplace === "SZABADNAP" && e.source === "manual" && e.durationSeconds === 0 && e.activity === "" && e.date === "2026-10-04");
+  assert.equal(s.markDayOff("2026-10-04", today).ok, false); assert.equal(s.state.entries.length, 1);
+  s.addEntry({ id: "z", date: "2026-10-05", type: "MEETING", typeLabel: "Értekezlet", unit: "ora", start: null, end: null, durationSeconds: 3600, quantity: null, workplace: "Győr", activity: "", source: "manual", departure: null, arrival: null });
+  assert.equal(s.markDayOff("2026-10-05", today).ok, false);   // van bejegyzés
+  assert.equal(s.markDayOff("2026-10-09", today).ok, false);   // jövő
+  assert.equal(s.markDayOff("2026-10-08", today).ok, false);   // ma
+  assert.equal(s.markDayOff("hibás", today).ok, false);
+  assert.equal(s.state.entries.length, 2);
+});

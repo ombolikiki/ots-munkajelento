@@ -31,21 +31,23 @@ test("egész napos típusok és jövőbeli nap", () => {
   assert.ok(M.workIsEmpty(row("2026-10-25", [e("2026-10-25", "MEETING")], true)));   // jövő: üres, még szabályokkal is
 });
 
-test("a skill szabályai: 8-ra kiegészítés, !!! jelölés, üres napok, szombati kivétel", () => {
+test("üres napok jelölése: !!! (hétköznap, szombat és vasárnap is), nincs 8-ra kiegészítés és nincs szombati kivétel", () => {
   const meeting = (d, h) => e(d, "MEETING", { durationSeconds: h * 3600, workplace: "Tata" });
-  let r = row("2026-10-05", [meeting("2026-10-05", 3)], true);          // hétfő
-  assert.equal(r.values.OFFICE_WORK, 5); assert.equal(r.workplace, "!!! Tata");   // Ügyintézés 5 > 4 -> !!!
-  r = row("2026-10-05", [meeting("2026-10-05", 5)], true);
-  assert.equal(r.values.OFFICE_WORK, 3); assert.equal(r.workplace, "Tata");
-  r = row("2026-10-05", [meeting("2026-10-05", 8)], true); assert.equal(r.values.OFFICE_WORK, undefined);
-  r = row("2026-10-10", [meeting("2026-10-10", 3)], true);               // szombat: nincs kiegészítés
-  assert.equal(r.values.OFFICE_WORK, undefined); assert.equal(r.values.MEETING, 3);
+  for (const [day, h] of [["2026-10-05", 3], ["2026-10-10", 3], ["2026-10-11", 2]]) {   // hétfő, szombat, vasárnap
+    const r = row(day, [meeting(day, h)], true);
+    assert.equal(r.values.OFFICE_WORK, undefined, day); assert.equal(r.values.MEETING, h); assert.equal(r.workplace, "Tata");   // azt írja be, amit rögzítettek
+  }
+  const big = row("2026-10-05", [e("2026-10-05", "OFFICE_WORK", { durationSeconds: 5 * 3600, workplace: "Tata" })], true);
+  assert.equal(big.workplace, "Tata"); assert.equal(big.values.OFFICE_WORK, 5);        // nincs !!! az 5 órás Ügyintézésre
   assert.equal(row("2026-10-07", [], true).workplace, "!!!");            // üres hétköznap
   assert.equal(row("2026-10-10", [], true).workplace, "!!!");            // üres szombat
-  assert.equal(row("2026-10-11", [], true).workplace, "SZABADNAP");      // üres vasárnap
-  assert.ok(M.workIsEmpty(row("2026-10-07", [], false)));                // szabályok nélkül üres marad
-  r = row("2026-10-05", [e("2026-10-05", "OFFICE_WORK", { durationSeconds: 5 * 3600, workplace: "" })], true);
-  assert.equal(r.workplace, "!!!");                                      // nincs hely: csak a jelölés
+  assert.equal(row("2026-10-11", [], true).workplace, "!!!");            // üres vasárnap: NEM SZABADNAP
+  assert.equal(row("2026-10-11", [e("2026-10-11", "DAY_OFF", { unit: "egesz_nap", durationSeconds: 0 })], true).workplace, "SZABADNAP");
+  assert.ok(M.workIsEmpty(row("2026-10-07", [], false)));                // kikapcsolva csak a rögzített napok látszanak
+  assert.equal(row("2026-10-05", [e("2026-10-05", "OFFICE_WORK", { durationSeconds: 5 * 3600, workplace: "" })], true).workplace, "");
+  assert.equal(row("2026-10-05", [meeting("2026-10-05", 3), meeting("2026-10-05", 1)], true).values.MEETING, 4);   // napi összeg
+  assert.equal(row("2026-10-05", [e("2026-10-05", "MEETING", { durationSeconds: 9000, workplace: "Tata" })], true).values.MEETING, 3);   // felfelé kerekítés
+  assert.equal(row("2026-10-05", [e("2026-10-05", "MEETING", { durationSeconds: 12 * 3600, workplace: "Tata" })], true).values.MEETING, 8);   // legfeljebb 8
 });
 
 test("Munkahely mező: különböző helyek időrendben, Utazás Munkahelyei külön", () => {

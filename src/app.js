@@ -11,6 +11,7 @@ import { esc, $ } from "./ui/util.js";
 import { icon } from "./ui/icons.js";
 import { fieldsHTML, pickPlace } from "./ui/fields.js";
 import * as capture from "./ui/capture.js";
+import * as sugg from "./ui/suggest-ui.js";
 import * as cal from "./ui/calendar-view.js";
 import * as lower from "./ui/lower.js";
 import * as settings from "./ui/settings.js";
@@ -33,7 +34,7 @@ try {
   store = createStore(window.localStorage);
 }
 const S = store.state;
-ctx.store = store; ctx.S = S; ctx.render = () => render(); ctx.now = () => Date.now();
+ctx.store = store; ctx.S = S; ctx.render = () => render(); ctx.now = () => Date.now(); ctx.refreshGate = () => capture.refreshGate();
 
 let msgHandle = null;
 ctx.say = (text, isErr = false, ms = 4000) => {
@@ -134,6 +135,7 @@ function render() {
   document.querySelectorAll("[data-keep-scroll]").forEach((el) => { keep[el.dataset.keepScroll] = el.scrollTop; });
   const winY = window.scrollY, active = document.activeElement, activeId = active && active.id;
   const app = $("#app");
+  sugg.hide();
   app.innerHTML = `<div class="panel ${ui.settings ? "is-settings" : ""}">${headerHTML()}${bannersHTML()}${ui.settings ? "" : reminderHTML() + folderBannerHTML()}${bodyHTML()}</div>${modalHTML()}`;
   document.querySelectorAll("[data-keep-scroll]").forEach((el) => { if (keep[el.dataset.keepScroll] != null) el.scrollTop = keep[el.dataset.keepScroll]; });
   if (ui.mode === "calendar" && !ui.settings && keep.cal == null) { const c = $("#calscroll"); if (c) c.scrollTop = 0; }
@@ -148,6 +150,7 @@ const actions = {
   ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions, ...calui.actions,
   tab(el) { ui.mode = el.dataset.tab; if (ui.mode !== "calendar") ui.pending = null; ui.msg = null; },
   pick(el) { fieldsPick(el); },
+  pickType(el) { store.setDraftType(el.dataset.code); document.querySelectorAll("details.menu[open]").forEach((d) => d.removeAttribute("open")); },
   qty(el) { S.draft.quantity = Math.min(99, Math.max(1, S.draft.quantity + Number(el.dataset.d))); store.saveDraft(); },
   toggleSettings() { ui.settings = !ui.settings; ui.colorOpen = null; },
   remindFill() { ui.day = addDays(todayYMD(), -1); ui.mode = "manual"; ui.pending = null; },
@@ -213,6 +216,7 @@ async function onClick(ev) {
 
 function onInput(ev) {
   const el = ev.target, ns = el.dataset?.ns, f = el.dataset?.field, isChange = ev.type === "change";
+  if (el.dataset?.suggest && !isChange) sugg.onInput(el);
   if (!ns) return;
   const value = el.type === "checkbox" ? el.checked : el.value;
   switch (ns) {
@@ -250,7 +254,10 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "importFile" && ev.target.files?.[0]) { importFile(ev.target.files[0]); ev.target.value = ""; return; }
   onInput(ev);
 });
+document.addEventListener("focusin", sugg.onFocusIn);
+document.addEventListener("focusout", sugg.onFocusOut);
 document.addEventListener("keydown", (ev) => {
+  if (sugg.onKey(ev)) return;
   if (ev.key === "Escape" && ui.modal) { ui.modal = null; ui.skill = null; render(); return; }
   if (ev.key !== "Enter") return;
   const t = ev.target;

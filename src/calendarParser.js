@@ -99,7 +99,7 @@ const STREET_WORDS = new Set(["ut", "utca", "u", "ter", "korut", "krt", "setany"
 /** A cím folytatása (az utcarész után): emelet, ajtó stb.; ezek nem új cím. */
 const CONTINUATION_WORDS = new Set(["emelet", "em", "ajto", "fszt", "lepcsohaz", "epulet", "ep", "hrsz"]);
 const wordsOf = (t) => fold(t).split(" ").map((w) => w.replace(/^[.,;]+|[.,;]+$/g, "")).filter(Boolean);
-const isStreetLike = (t) => Array.from(t).some(isDigit) || wordsOf(t).some((w) => STREET_WORDS.has(w));
+export const isStreetLike = (t) => Array.from(t).some(isDigit) || wordsOf(t).some((w) => STREET_WORDS.has(w));
 const isContinuation = (t) => wordsOf(t).some((w) => CONTINUATION_WORDS.has(w));
 
 /**
