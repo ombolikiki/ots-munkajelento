@@ -5,6 +5,7 @@ import { officialSeconds, targetState, missingDaysFor, shortDays, groupByDate, l
 import { isDueDay, pendingAttendance, reportsOn, emptyReport, clampCount, MAX_COUNT } from "../attendance.js";
 import { ctx, ui } from "./ctx.js";
 import { esc, entryAmount, entryWhen, entryDetail, hm } from "./util.js";
+import { kmDriven } from "../entries.js";
 import { icon } from "./icons.js";
 
 const entriesOn = (day) => ctx.S.entries.filter((e) => e.date === day);
@@ -16,6 +17,14 @@ function targetDot(state, hours) {
   if (state === "inProgress") return `<span class="dot lg warnc" title="A mai napon még nincs meg a napi ${hours} óra"></span>`;
   if (state === "reached") return `<span class="okmark" title="Megvan a napi ${hours} óra">${icon("checkCircle", 1)}</span>`;
   return "";
+}
+
+/** Az út km-állásainak javítása a sor alatt (mindkettő opcionális; üresen törli az értéket). */
+function kmEditorHTML() {
+  const k = ui.kmEdit;
+  return `<div class="kmedit"><div class="kmrow"><input type="text" inputmode="numeric" data-ns="kmedit" data-field="start" value="${esc(k.start)}" placeholder="induló km" autocomplete="off" aria-label="Induló km">
+    <span class="arrowc">${icon("forward", 0.85)}</span><input type="text" inputmode="numeric" data-ns="kmedit" data-field="end" value="${esc(k.end)}" placeholder="érkező km" autocomplete="off" aria-label="Érkező km">
+    <button class="linkbtn acc small" data-action="kmSave">Mentés</button></div>${k.error ? `<p class="small stopt">${esc(k.error)}</p>` : ""}</div>`;
 }
 
 export function dayListHTML() {
@@ -36,10 +45,13 @@ export function dayListHTML() {
   } else {
     h += `<div class="items">${items.map((e) => {
       const sure = ui.confirmDelete === e.id;
+      const travel = e.type === "TRAVEL", editing = travel && ui.kmEdit && ui.kmEdit.id === e.id;
+      const km = travel && (e.startKm != null || e.endKm != null) ? `<div class="d kmline">km-óra: ${e.startKm ?? "?"} → ${e.endKm ?? "?"}${kmDriven(e) != null ? ` (${kmDriven(e)} km)` : ""}</div>` : "";
       return `<div class="item"><span class="bar" style="background:${colorFor(e.type)}"></span>
-        <div class="main"><div class="t">${esc([entryWhen(e), e.typeLabel].filter(Boolean).join("  "))}</div><div class="d">${esc(entryDetail(e))}</div></div>
+        <div class="main"><div class="t">${esc([entryWhen(e), e.typeLabel].filter(Boolean).join("  "))}</div><div class="d">${esc(entryDetail(e))}</div>${km}</div>
         <div class="amt">${esc(entryAmount(e))}</div>
-        <button class="del ${sure ? "sure" : ""}" data-action="delete" data-id="${e.id}" aria-label="Törlés">${sure ? "Biztos?" : icon("trash", 1)}</button></div>`;
+        ${travel ? `<button class="del kmbtn ${editing ? "on" : ""}" data-action="kmEdit" data-id="${e.id}" aria-label="Km-állások javítása" title="Km-állások javítása">${icon("edit", 1)}</button>` : ""}
+        <button class="del ${sure ? "sure" : ""}" data-action="delete" data-id="${e.id}" aria-label="Törlés">${sure ? "Biztos?" : icon("trash", 1)}</button></div>${editing ? kmEditorHTML() : ""}`;
     }).join("")}</div>`;
     const codes = []; for (const e of items) if (!codes.includes(e.type)) codes.push(e.type);
     const total = state === "exempt"
@@ -143,6 +155,17 @@ export const actions = {
     let msg = `${marked.length} vasárnap szabadnapnak jelölve.`;
     const warned = [...new Set(marked.map((e) => monthLimitWarning(ctx.S.entries, e)).filter(Boolean))];
     ctx.say(msg + (warned.length ? " " + warned[0] : ""), warned.length > 0, warned.length ? 15000 : undefined);
+  },
+  kmEdit(el) {
+    const id = el.dataset.id, e = ctx.S.entries.find((x) => x.id === id);
+    if (!e) return;
+    ui.kmEdit = ui.kmEdit && ui.kmEdit.id === id ? null : { id, start: e.startKm == null ? "" : String(e.startKm), end: e.endKm == null ? "" : String(e.endKm), error: null };
+  },
+  kmSave() {
+    const k = ui.kmEdit;
+    if (!k) return;
+    const err = ctx.store.updateKm(k.id, k.start, k.end);
+    if (err) k.error = err; else ui.kmEdit = null;
   },
   delete(el) {
     if (ui.confirmDelete === el.dataset.id) { ctx.store.deleteEntry(el.dataset.id); ui.confirmDelete = null; } else ui.confirmDelete = el.dataset.id;

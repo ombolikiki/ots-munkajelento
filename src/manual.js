@@ -134,19 +134,29 @@ export const workIsEmpty = (r) => !r.workplace && !r.holiday && !Object.keys(r.v
 export function costRows(entries, y, m, home) {
   const rows = [];
   for (const day of monthDays(y, m)) {
-    const travel = chronological(entries.filter((e) => e.date === day && e.type === "TRAVEL"));
-    if (!travel.length) continue;
-    const routes = travel.map((e) => routePoints(e, home)).filter((r) => r.length);
-    // A Tevékenység mezőt kizárólag az Utazás bejegyzések Tevékenysége adja (más kategóriából nem veszünk át szöveget).
-    const texts = [];
-    for (const e of travel) { const t = String(e.activity ?? "").trim(); if (t && !texts.includes(t)) texts.push(t); }
-    const mapRoutes = travel.filter((e) => routePoints(e, home).length).map((e) => routeDetail(e, home));
-    rows.push({ key: day, routes, mapRoutes, activity: texts.join("; ") });
+    const trips = chronological(entries.filter((e) => e.date === day && e.type === "TRAVEL")).filter((e) => routePoints(e, home).length);
+    // Minden Utazás bejegyzés külön sor. A Tevékenység mezőt kizárólag az adott Utazás bejegyzés Tevékenysége adja (más kategóriából nem veszünk át szöveget).
+    trips.forEach((e, i) => {
+      rows.push({
+        key: day, index: i, count: trips.length, points: routePoints(e, home), mapPoints: routeDetail(e, home),
+        activity: String(e.activity ?? "").trim(), startKm: e.startKm ?? null, endKm: e.endKm ?? null,
+      });
+    });
   }
   return rows;
 }
-export const costRoute = (r) => r.routes.map((p) => p.join(" - ")).join(" ; ");
-export const costSignature = (r) => costRoute(r) + "|" + r.activity;
+export const costRoute = (r) => r.points.join(" - ");
+/** Egy sor azonosítója a „felvittem” jelöléshez: a nap és az út sorszáma. */
+export const costRowKey = (r) => `${r.key}#${r.index}`;
+/** Az út hossza a sorban: csak ha mindkét km-állás megvan és az érkező nagyobb. */
+export const costKm = (r) => (r.startKm != null && r.endKm != null && r.endKm > r.startKm ? r.endKm - r.startKm : null);
+/** „1000 → 1060 (60 km)”, részleges állásnál a hiányzó helyén „?”; állás nélkül üres. */
+export function kmLabel(r) {
+  if (r.startKm == null && r.endKm == null) return "";
+  const d = costKm(r);
+  return `${r.startKm ?? "?"} → ${r.endKm ?? "?"}` + (d != null ? ` (${d} km)` : "");
+}
+export const costSignature = (r) => `${costRoute(r)}|${r.activity}|${r.startKm ?? ""}|${r.endKm ?? ""}`;
 
 /** Google Maps többpontos útvonal-hivatkozás (autós útvonal, a pontok sorrendjében); 2 pont alatt null. */
 export function mapsURL(points) {

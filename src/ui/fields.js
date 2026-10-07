@@ -43,6 +43,12 @@ export function fieldsHTML() {
         <label class="check small"><input type="radio" name="wplace" data-ns="draft" data-field="workplaceIsDeparture" value="0" ${d.workplaceIsDeparture ? "" : "checked"}> Cél</label></div>
         <label class="check small" title="Oda-vissza út: a munka után visszatértem a Kiindulásra (Kiindulás - Cél(ek) - Kiindulás)"><input type="checkbox" data-ns="draft" data-field="roundTrip" ${d.roundTrip ? "checked" : ""}> Oda-vissza</label></div>`;
   }
+  if (travel) {
+    h += `<div class="kmrow"><span class="mut small">Km-óra</span>
+      <input type="text" inputmode="numeric" data-ns="draft" data-field="startKm" value="${esc(d.startKm)}" placeholder="induló km" autocomplete="off" aria-label="Induló km" title="A kilométeróra állása az út elején (nem kötelező; az előző út végállásával előtöltve)">
+      <span class="arrowc">${icon("forward", 0.85)}</span>
+      <input type="text" inputmode="numeric" data-ns="draft" data-field="endKm" value="${esc(d.endKm)}" placeholder="érkező km" autocomplete="off" aria-label="Érkező km" title="A kilométeróra állása az út végén (nem kötelező)"></div>`;
+  }
   if (type && hasQuantity(type)) {
     h += `<div class="stepline"><span class="mut">Mennyiség</span><div class="stepper">
       <button type="button" class="step" data-action="qty" data-d="-1" aria-label="Kevesebb">−</button>

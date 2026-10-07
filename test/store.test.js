@@ -191,3 +191,31 @@ test("Szabadnap egy kattintással: csak üres, múltbeli napra, kétszer nem", (
   assert.equal(s.markDayOff("hibás", today).ok, false);
   assert.equal(s.state.entries.length, 2);
 });
+
+test("km: előtöltés az utolsó érkező km-mel, rögzítés után az érkező üres; a javítás ellenőrzéssel", () => {
+  const st = memory(); const s = createStore(st);
+  const trip = (id, date, a, b) => ({ id, date, type: "TRAVEL", typeLabel: "Utazás", unit: "ora", start: null, end: null, durationSeconds: 1800, quantity: null, workplace: "Tata", activity: "x", source: "manual", departure: "Győr", arrival: "Győr", startKm: a, endKm: b });
+  assert.equal(s.state.draft.startKm, "");
+  s.addEntry(trip("11111111-1111-4111-8111-111111111111", "2026-10-01", 1000, 1060));
+  s.addEntry(trip("22222222-2222-4222-8222-222222222222", "2026-10-02", 1060, 1100));
+  fill(s, { typeCode: "TRAVEL", departure: "Győr", destination: "Tata", activity: "x", startKm: "1100", endKm: "1150" });
+  s.resetDraft();
+  assert.equal(s.state.draft.startKm, "1100"); assert.equal(s.state.draft.endKm, "");
+  assert.equal(createStore(st).state.draft.startKm, "1100");   // újratöltéskor is
+  // javítás
+  assert.equal(s.updateKm("22222222-2222-4222-8222-222222222222", "1070", "1110"), null);
+  assert.deepEqual([s.state.entries[1].startKm, s.state.entries[1].endKm], [1070, 1110]);
+  assert.match(s.updateKm("22222222-2222-4222-8222-222222222222", "1000", "1110"), /kisebb, mint az előző út/);   // az előző: a lista előző eleme (1060)
+  assert.match(s.updateKm("22222222-2222-4222-8222-222222222222", "x", ""), /egész szám/);
+  assert.match(s.updateKm("22222222-2222-4222-8222-222222222222", "1200", "1100"), /nagyobbnak/);
+  assert.deepEqual([s.state.entries[1].startKm, s.state.entries[1].endKm], [1070, 1110]);   // hiba esetén nem módosít
+  assert.equal(s.updateKm("22222222-2222-4222-8222-222222222222", "", ""), null);   // üresen törlődik
+  assert.deepEqual([s.state.entries[1].startKm, s.state.entries[1].endKm], [null, null]);
+  assert.equal(s.state.draft.startKm, "1060");   // az előtöltés követi a javítást (az utolsó érkező állás most 1060)
+  assert.equal(s.updateKm("22222222-2222-4222-8222-222222222222", "1070", "1110"), null);
+  assert.equal(s.state.draft.startKm, "1110");
+  fill(s, { startKm: "5000" }); s.updateKm("22222222-2222-4222-8222-222222222222", "1070", "1120");
+  assert.equal(s.state.draft.startKm, "5000");   // a kézzel írt érték marad
+  assert.match(s.updateKm("nincs", "1", "2"), /nem található/);
+  assert.deepEqual(s.monthKm("2026-10-20"), { km: 110, incomplete: 0 });
+});

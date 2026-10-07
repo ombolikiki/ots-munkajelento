@@ -53,6 +53,11 @@ function remindersCard(s) {
     <p class="small mut">Ha egy napon nincs meg, kis piros jel mutatja a napi listában, a naptárban és a kitöltetlen napok között.</p>`);
 }
 
+function kmCard(s) {
+  return card("Kilométeróra", `${toggle("kmTrack", s.kmTrack, "Minden úthoz megadom a km-órát is")}
+    <p class="small mut">Az Utazás űrlapján az induló és az érkező km-állás mindig látszik (nem kötelező). Ha ezt bekapcsolod, az ablak alján a hónap autós km-einek összege is látszik. Az induló állás az előző út végállásával előtöltődik; a rögzített utak km-állását a napi listában a ceruza ikonnal javíthatod.</p>`);
+}
+
 function attendanceCard(s) {
   const list = s.congregations.map((c, i) => `<div class="listrow"><span>${esc(c)}</span><span class="grow"></span>
     <button class="iconbtn sm" data-action="congMove" data-name="${esc(c)}" data-d="-1" ${i === 0 ? "disabled" : ""} title="Feljebb">${icon("chevU", 1)}</button>
@@ -155,7 +160,7 @@ function resetCard() {
 
 export function settingsHTML() {
   const s = ctx.S.settings;
-  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), calendarSettingsHTML(), placesCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
+  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), calendarSettingsHTML(), placesCard(s), kmCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
     `<p class="small mut center">OTS Munkajelentő (web) ${VERSION} · <a href="adatvedelem.html" target="_blank" rel="noopener">Adatvédelem</a> · <a href="felhasznalasi-feltetelek.html" target="_blank" rel="noopener">Felhasználási feltételek</a></p>`].join("");
 }
 

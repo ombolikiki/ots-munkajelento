@@ -5,6 +5,7 @@ export const ui = {
   mode: "timer", day: todayYMD(), settings: false, modal: null,
   msg: null, msgErr: false, update: false,
   manual: { mode: "range", from: "", to: "", hours: 1, minutes: 0, message: null },
+  kmEdit: null,   // a napi listában éppen javított út: {id, start, end, error}
   plannedStart: null,   // az Időzítő indítás előtt megadott korábbi kezdés (ms), null = Most
   pomoSettings: false, confirmDelete: null, confirmReset: 0,
   calWeek: null, pending: null,

@@ -1,11 +1,11 @@
 // Bejegyzések létrehozása és az űrlap szabályai (tiszta függvények, tesztelhetők).
 import { UNIT, isTravel, isWholeDay, hasQuantity, lookupByCode } from "./types.js";
-import { uuid } from "./csv.js";
+import { uuid, number } from "./csv.js";
 import { parsePlace, parsePlaces } from "./calendarParser.js";
 import { toYMD, hhmmss, todayYMD, parseTime, parseYMD, pad } from "./dates.js";
 
 export const emptyDraft = () => ({
-  typeCode: "", workplace: "", activity: "", departure: "", destination: "", roundTrip: true, workplaceIsDeparture: false, quantity: 1,
+  typeCode: "", workplace: "", activity: "", departure: "", destination: "", roundTrip: true, workplaceIsDeparture: false, startKm: "", endKm: "", quantity: 1,
 });
 
 export const draftType = (d) => lookupByCode(d.typeCode);
@@ -23,7 +23,7 @@ export function applyType(d, code, home = "") {
 }
 
 /** Az űrlap kiürítése rögzítés után (az Oda-vissza jelölő újra bejelölt, a Munkahely a Cél, mint a natív appban). */
-export const clearedDraft = () => emptyDraft();
+export const clearedDraft = (_d, startKm = "") => ({ ...emptyDraft(), startKm });
 
 /** Munkahely(ek) szövege -> tiszta lista. */
 export const workplaceList = (text) =>
@@ -50,8 +50,64 @@ export function clampStart(startMs, nowMs) {
   return Math.min(nowMs, Math.max(dayStart, startMs));
 }
 
+// ---------- Kilométeróra (Mac 1.6.0) ----------
+
+/** A mezőbe írt szöveg km-állása: üresen nincs érték (és ez rendben van); nem szám, negatív vagy 9 999 999 fölötti érték esetén valid = false. */
+export function kmValue(text) {
+  const t = String(text ?? "").replace(/\s/g, "");
+  if (!t) return { value: null, valid: true };
+  const v = number(t);
+  if (v == null || v < 0 || v > 9_999_999) return { value: null, valid: false };
+  return { value: v, valid: true };
+}
+
+/** Az utolsó rögzített érkező km-állás (az új út induló állásának előtöltéséhez); a lista időrendi. */
+export function lastEndKm(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) if (entries[i].endKm != null) return entries[i].endKm;
+  return null;
+}
+
+/** Az előző út érkező km-állása a megadott napig (bezárólag), az `excludeId` bejegyzés nélkül. */
+export function previousEndKm(entries, dayKey, excludeId = null) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (e.endKm != null && e.date <= dayKey && e.id !== excludeId) return e.endKm;
+  }
+  return null;
+}
+
+/** A km-állások hibája (null, ha rendben): az érkezőnek nagyobbnak kell lennie az indulónál, az indulónak pedig nem lehet kisebb az előző út végállásánál. */
+export function kmProblem(start, end, previous) {
+  if (start != null && end != null && end <= start) return "Az érkező km-állásnak nagyobbnak kell lennie az induló km-nél.";
+  if (start != null && previous != null && start < previous) return `Az induló km-állás (${start}) kisebb, mint az előző út érkező állása (${previous}).`;
+  if (start == null && end != null && previous != null && end <= previous) return `Az érkező km-állás (${end}) nem lehet kisebb az előző út érkező állásánál (${previous}).`;
+  return null;
+}
+
+/** Az út hossza: csak ha mindkét állás megvan és az érkező nagyobb; egyébként null. */
+export const kmDriven = (e) => (e && e.startKm != null && e.endKm != null && e.endKm > e.startKm ? e.endKm - e.startKm : null);
+
+/** A hónap (a megadott napé) autós km-ei: az utak összege (csak a mindkét állással rögzítettek), és hány útból hiányzik valamelyik állás. */
+export function monthKm(entries, day) {
+  const prefix = String(day ?? "").slice(0, 7);
+  let km = 0, incomplete = 0;
+  for (const e of entries) {
+    if (e.type !== "TRAVEL" || !e.date.startsWith(prefix)) continue;
+    const d = kmDriven(e);
+    if (d != null) km += d; else incomplete++;
+  }
+  return { km, incomplete };
+}
+
+/** Az Utazás űrlap km-mezőinek hibája (nem kötelező mezők: üresen rendben). km: {entries, day} az „előző út” megállapításához. */
+export function kmHint(d, entries, day) {
+  const s = kmValue(d.startKm), e = kmValue(d.endKm);
+  if (!s.valid || !e.valid) return "A km-állás egész szám legyen.";
+  return kmProblem(s.value, e.value, previousEndKm(entries ?? [], day ?? "9999-12-31"));
+}
+
 /** Hiányzó kötelező mezők szövege, vagy null, ha az űrlap rendben van. */
-export function missingHint(d) {
+export function missingHint(d, km = null) {
   const type = draftType(d);
   if (!type) return "Válassz tevékenység-típust.";
   if (isWholeDay(type)) return null;
@@ -63,16 +119,16 @@ export function missingHint(d) {
     if (miss.length) return "Kötelező mező: " + miss.join(", ") + ".";
     if (!parsePlace(d.departure)) return ORIGIN_HINT;
     if (!parsePlaces(d.destination)) return DEST_HINT;
-    return null;
+    return km ? kmHint(d, km.entries, km.day) : null;
   }
   return d.workplace.trim() ? null : "A Munkahely mező kötelező.";
 }
 
 /** Az indító (Időzítő) vagy mentő (Bevitel) gomb tiltása és a figyelmeztetés szövege az űrlap állapotából. */
-export function gate(tab, d) {
+export function gate(tab, d, km = null) {
   const type = draftType(d);
   if (tab === "timer" && type && isWholeDay(type)) return { disabled: true, text: "Ez a típus csak a Kézi bevitelnél használható." };
-  const hint = missingHint(d);
+  const hint = missingHint(d, km);
   return { disabled: !!hint, text: hint || "" };
 }
 
@@ -121,6 +177,8 @@ function base(d, type, source) {
     departureAddress: t ? t.departureAddress : null,
     arrivalAddress: t ? t.arrivalAddress : null,
     workplaceIsDeparture: travel && !!d.workplaceIsDeparture,
+    startKm: travel ? kmValue(d.startKm).value : null,
+    endKm: travel ? kmValue(d.endKm).value : null,
   };
 }
 
@@ -152,7 +210,7 @@ export function timedEntry(d, startMs, endMs, source = "timer") {
  */
 export function manualEntry(d, opts) {
   const now = opts.now ?? new Date();
-  const hint = missingHint(d);
+  const hint = missingHint(d, { entries: opts.existing ?? [], day: opts.day });
   if (hint) return { ok: false, error: hint };
   if (!parseYMD(opts.day)) return { ok: false, error: "Érvénytelen nap." };
   if (opts.day > todayYMD(now)) return { ok: false, error: "Jövőbeli napra nem lehet bejegyzést felvenni." };
@@ -189,7 +247,7 @@ export function manualEntry(d, opts) {
  * Visszatér: {ok:true, entry} vagy {ok:false, error}
  */
 export function slotEntry(d, day, startMin, endMin, now = new Date(), existing = []) {
-  const hint = missingHint(d);
+  const hint = missingHint(d, { entries: existing, day });
   if (hint) return { ok: false, error: hint };
   if (!parseYMD(day)) return { ok: false, error: "Érvénytelen nap." };
   if (day > todayYMD(now)) return { ok: false, error: "Jövőbeli napra nem lehet bejegyzést felvenni." };

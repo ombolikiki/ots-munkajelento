@@ -19,7 +19,7 @@ import * as ots from "./ui/ots.js";
 import * as wiz from "./ui/skill-wizard.js";
 import * as calui from "./ui/calendar-ui.js";
 import { playSound, notify, NO_SOUND } from "./ui/sound.js";
-import { parseYMD } from "./dates.js";
+import { parseYMD, formatMonth } from "./dates.js";
 
 let store;
 try {
@@ -102,13 +102,21 @@ function bannersHTML() {
   return h;
 }
 
+/** A hónap (a kiválasztott napé) autós km-ei összesen; csak ha a Beállításokban be van kapcsolva a km-állások vezetése. */
+function monthKmHTML() {
+  const r = store.monthKm(ui.day), p = parseYMD(ui.day);
+  if (!p) return "";
+  return `<div class="monthkm">${icon("car", 0.95)}<strong>${esc(formatMonth(p.y, p.m))}: ${r.km} km</strong>${r.incomplete ? `<span class="mut">(${r.incomplete} útnál hiányzik a km-állás)</span>` : ""}</div>`;
+}
+
 function footerHTML() {
   const f = store.folder;
   let text;
   if (f && f.status === "ready") text = `${icon("checkCircle", 0.9)} Automatikus mentés: ${esc(f.name)}`;
   else if (f && f.status === "needs-permission") text = `${icon("alert", 0.9)} Az adatmappa engedélyre vár`;
   else text = `${icon("alert", 0.9)} Az adatok csak a böngészőben vannak`;
-  return `<footer class="foot"><span class="small mut ${f && f.status === "ready" ? "okf" : ""}">${text}</span><button class="linkbtn small" data-action="toggleSettings">Beállítások</button></footer>`;
+  const mk = S.settings.kmTrack ? monthKmHTML() : "";
+  return `${mk}<footer class="foot"><span class="small mut ${f && f.status === "ready" ? "okf" : ""}">${text}</span><button class="linkbtn small" data-action="toggleSettings">Beállítások</button></footer>`;
 }
 
 function bodyHTML() {
@@ -236,6 +244,7 @@ function onInput(ev) {
       } else capture.refreshGate();
       return;
     case "tstart": if (isChange) { capture.setStartTime(value); render(); } return;
+    case "kmedit": if (ui.kmEdit) ui.kmEdit[f] = value; return;
     case "pomo": if (isChange) { store.saveSettings({ pomo: { ...S.settings.pomo, [f]: value } }); render(); } return;
     case "set": if (isChange) { settings.onSettingChange(el); render(); if (f === "syncEnabled" && value) calui.syncNow({ auto: false }); } return;
     case "calsel": if (isChange) { calui.onCalSelect(el); render(); } return;

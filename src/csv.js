@@ -6,7 +6,7 @@ export const COLUMNS = [
   "Azonosító", "Dátum", "Kezdés", "Vége", "Időtartam (mp)", "Időtartam (óó:pp)",
   "Indulás", "Munkahely", "Érkezés",
   "Típus kód", "Típus", "Egység", "Mennyiség", "Tevékenység", "Forrás",
-  "Cím", "Naptár azonosító", "Indulás cím", "Érkezés cím", "Munkahely helye",   // a naptárintegrációhoz és az Utazáshoz; a régi, ezek nélküli fájlok olvashatók maradnak
+  "Cím", "Naptár azonosító", "Indulás cím", "Érkezés cím", "Munkahely helye", "Induló km", "Érkező km",   // a naptárintegrációhoz és az Utazáshoz; a régi, ezek nélküli fájlok olvashatók maradnak
 ];
 
 export function quote(s) {
@@ -28,7 +28,7 @@ export function encodeText(entries) {
       e.type, e.typeLabel, e.unit,
       e.quantity == null ? "" : String(e.quantity),
       e.activity ?? "", e.source ?? "manual",
-      e.address ?? "", e.calendarID ?? "", e.departureAddress ?? "", e.arrivalAddress ?? "", e.workplaceIsDeparture ? "indulás" : "",
+      e.address ?? "", e.calendarID ?? "", e.departureAddress ?? "", e.arrivalAddress ?? "", e.workplaceIsDeparture ? "indulás" : "", e.startKm == null ? "" : String(e.startKm), e.endKm == null ? "" : String(e.endKm),
     ].map(quote).join(";"));
   }
   return lines.join("\r\n") + "\r\n";
@@ -111,7 +111,7 @@ export function decode(input) {
   if (iType == null && iTypeLabel == null) throw new Error("Hiányzik a „Típus kód” (vagy „Típus”) oszlop az adatfájlból.");
   const iId = idx("Azonosító"), iStart = idx("Kezdés"), iEnd = idx("Vége"), iSecs = idx("Időtartam (mp)");
   const iUnit = idx("Egység"), iDep = idx("Indulás"), iArr = idx("Érkezés"), iWork = idx("Munkahely");
-  const iQty = idx("Mennyiség"), iAct = idx("Tevékenység"), iSrc = idx("Forrás"), iAddr = idx("Cím"), iCal = idx("Naptár azonosító"), iDepAddr = idx("Indulás cím"), iArrAddr = idx("Érkezés cím"), iWpl = idx("Munkahely helye");
+  const iQty = idx("Mennyiség"), iAct = idx("Tevékenység"), iSrc = idx("Forrás"), iAddr = idx("Cím"), iCal = idx("Naptár azonosító"), iDepAddr = idx("Indulás cím"), iArrAddr = idx("Érkezés cím"), iWpl = idx("Munkahely helye"), iKm0 = idx("Induló km"), iKm1 = idx("Érkező km");
 
   const entries = [], warnings = [];
   records.forEach((row, n) => {
@@ -141,6 +141,7 @@ export function decode(input) {
       if (d != null) duration = Math.max(0, d);
     }
     if (type.unit === UNIT.WHOLE_DAY) duration = 0;
+    const km = (i) => { const v = number(cell(i)); return v != null && v >= 0 && v <= 9_999_999 ? v : null; };   // hibás érték üresnek számít, a sor megmarad
     const qtyN = number(cell(iQty));
     const id = UUID_RE.test(cell(iId)) ? cell(iId).toLowerCase() : uuid();
     entries.push({
@@ -152,6 +153,7 @@ export function decode(input) {
       address: cell(iAddr) || null, calendarID: cell(iCal) || null,
       departureAddress: cell(iDepAddr) || null, arrivalAddress: cell(iArrAddr) || null,
       workplaceIsDeparture: cell(iWpl).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === "indulas",
+      startKm: km(iKm0), endKm: km(iKm1),
     });
   });
   return { entries, warnings };

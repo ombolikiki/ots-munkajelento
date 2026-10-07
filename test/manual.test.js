@@ -58,35 +58,23 @@ test("Munkahely mező: különböző helyek időrendben, Utazás Munkahelyei kü
   assert.equal(row("2026-10-05", list).workplace, "Tata, Mór, Bicske");
 });
 
-test("költségelszámolás: útvonal, székhely az üres végpontokon, azonos szomszédos pontok összevonása, csak az Utazás tevékenysége", () => {
-  const list = [e("2026-10-05", "TRAVEL", { workplace: "Tata, Mór", departure: "Győr", arrival: "Győr", activity: "Hittan", start: "08:00:00", end: "09:00:00" }),
-    e("2026-10-05", "TRAVEL", { workplace: "Győr", departure: "", arrival: "", activity: "Hittan", start: "17:00:00", end: "18:00:00" }),
+test("költségelszámolás: minden Utazás külön sor, székhely az üres végpontokon, csak az adott Utazás tevékenysége, km a sorban", () => {
+  const list = [e("2026-10-05", "TRAVEL", { workplace: "Tata, Mór", departure: "Győr", arrival: "Győr", activity: "Hittan", start: "08:00:00", end: "09:00:00", startKm: 1000, endKm: 1060 }),
+    e("2026-10-05", "TRAVEL", { workplace: "Győr", departure: "", arrival: "", activity: "Látogatás", start: "17:00:00", end: "18:00:00" }),
     e("2026-10-05", "MEETING", { activity: "Nem ez" }), e("2026-10-06", "MEETING", { activity: "Semmi" }),
     e("2026-09-30", "TRAVEL", { workplace: "Mór", departure: "Győr", arrival: "Tata", activity: "Más hónap" })];
   const rows = M.costRows(list, 2026, 10, "Pécs");
-  assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0].routes, [["Győr", "Tata", "Mór", "Győr"], ["Pécs", "Győr", "Pécs"]]);   // az üres végpont helyén a székhely áll
-  assert.equal(M.costRoute(rows[0]), "Győr - Tata - Mór - Győr ; Pécs - Győr - Pécs");
-  assert.equal(rows[0].activity, "Hittan");
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0].points, ["Győr", "Tata", "Mór", "Győr"]); assert.deepEqual(rows[1].points, ["Pécs", "Győr", "Pécs"]);   // az üres végpont helyén a székhely áll
+  assert.equal(M.costRoute(rows[0]), "Győr - Tata - Mór - Győr");
+  assert.deepEqual(rows.map((r) => [r.index, r.count, r.activity, M.costRowKey(r)]), [[0, 2, "Hittan", "2026-10-05#0"], [1, 2, "Látogatás", "2026-10-05#1"]]);
+  assert.deepEqual([rows[0].startKm, rows[0].endKm, M.costKm(rows[0]), M.kmLabel(rows[0])], [1000, 1060, 60, "1000 → 1060 (60 km)"]);
+  assert.deepEqual([rows[1].startKm, rows[1].endKm, M.costKm(rows[1]), M.kmLabel(rows[1])], [null, null, null, ""]);
+  assert.equal(M.kmLabel({ startKm: 1000, endKm: null }), "1000 → ?"); assert.equal(M.kmLabel({ startKm: null, endKm: 1060 }), "? → 1060");
+  assert.equal(M.costKm({ startKm: 1060, endKm: 1000 }), null);
   const home = M.costRows([e("2026-10-07", "TRAVEL", { workplace: "Mór", departure: "", arrival: "", activity: "x" })], 2026, 10, "Pécs");
-  assert.deepEqual(home[0].routes, [["Pécs", "Mór", "Pécs"]]);
+  assert.deepEqual(home[0].points, ["Pécs", "Mór", "Pécs"]);
   assert.deepEqual(M.costRows([e("2026-10-07", "TRAVEL", { workplace: "Mór", departure: "Pécs", arrival: "Pécs" })], 2026, 11, "Pécs"), []);
-});
-
-test("Google Maps hivatkozás kódolása", () => {
-  assert.equal(M.mapsURL(["Győr", "Tata"]), "https://www.google.com/maps/dir/Gy%C5%91r/Tata");
-  assert.equal(M.mapsURL(["Szent István út 3/B", "Mór & Társa"]), "https://www.google.com/maps/dir/Szent%20Istv%C3%A1n%20%C3%BAt%203%2FB/M%C3%B3r%20%26%20T%C3%A1rsa");
-  assert.equal(M.mapsURL(["Győr"]), null); assert.equal(M.mapsURL([]), null);
-});
-
-test("létszámjelentő sorok a hónapra: esedékes napok gyülekezetenként + a nem esedékes rögzített napok", () => {
-  const rep = (date, c) => ({ date, congregation: c, sabbathSchool: { children: 1, adults: 2, guests: 3 }, worship: { children: 0, adults: 0, guests: 0 } });
-  const rows = M.attendanceRows([rep("2026-10-10", "Mór"), rep("2026-10-17", "Tata")], ["Mór", "Bicske"], 2026, 10);
-  assert.deepEqual(rows.map((r) => `${r.key} ${r.congregation} ${r.report ? "van" : "nincs"}`),
-    ["2026-10-10 Mór van", "2026-10-10 Bicske nincs", "2026-10-17 Mór nincs", "2026-10-17 Bicske nincs", "2026-10-17 Tata van"]);
-  assert.deepEqual(M.attendanceRows([], ["Mór"], 2026, 9), []);   // szeptemberben nincs esedékes nap
-  assert.equal(M.attendanceSignature(rows[0]), "1,2,3,0,0,0"); assert.equal(M.attendanceSignature(rows[1]), "-");
-  assert.deepEqual(M.attendanceRows([], ["Mór"], 2026, 13), []);
 });
 
 test("a „felvittem” jelölés aláírása változik, ha a sor tartalma módosul", () => {
@@ -96,6 +84,8 @@ test("a „felvittem” jelölés aláírása változik, ha a sor tartalma módo
   const c1 = M.costRows([e("2026-10-05", "TRAVEL", { workplace: "Mór", departure: "A", arrival: "A", activity: "x" })], 2026, 10, "A")[0];
   const c2 = M.costRows([e("2026-10-05", "TRAVEL", { workplace: "Mór", departure: "A", arrival: "A", activity: "y" })], 2026, 10, "A")[0];
   assert.notEqual(M.costSignature(c1), M.costSignature(c2));
+  const c3 = M.costRows([e("2026-10-05", "TRAVEL", { workplace: "Mór", departure: "A", arrival: "A", activity: "x", startKm: 5, endKm: 9 })], 2026, 10, "A")[0];
+  assert.notEqual(M.costSignature(c1), M.costSignature(c3));   // a km-állás is beleszámít az aláírásba
 });
 
 test("összesítő sor és induló hónap", () => {

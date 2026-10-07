@@ -298,7 +298,8 @@ button.cp:hover { background: color-mix(in srgb, var(--ac) 14%, transparent); co
 .c-place { width: 200px; flex: none; }
 .c-num { width: 70px; flex: none; text-align: center; } .c-num.col { display: flex; flex-direction: column; gap: 1px; align-items: center; } .c-num.col i { display: block; height: 4px; width: 100%; } .c-num small { font-size: 9px; font-weight: 400; color: var(--mut); }
 .c-num.has { background: color-mix(in srgb, var(--c) 18%, transparent); align-self: stretch; display: grid; place-items: center; }
-.c-route { width: 380px; flex: none; display: flex; align-items: center; gap: 4px; } .c-act { width: 300px; flex: none; } .c-map { width: 150px; flex: none; display: flex; gap: 4px; }
+.c-kmo { width: 150px; flex: none; }
+.c-route { width: 340px; flex: none; display: flex; align-items: center; gap: 4px; } .c-act { width: 240px; flex: none; } .c-map { width: 150px; flex: none; display: flex; gap: 4px; }
 .c-grp { width: 276px; flex: none; text-align: center; } .c-grp b { display: block; } .c-grp small { font-size: 9px; font-weight: 400; color: var(--mut); } .c-grp.nums { display: flex; justify-content: space-around; }
 
 .stepper-dots { display: flex; align-items: center; gap: 6px; padding-top: 4px; }
@@ -339,3 +340,12 @@ button.cp:hover { background: color-mix(in srgb, var(--ac) 14%, transparent); co
 .sugg { padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: var(--t-md); }
 .sugg:hover, .sugg.on { background: color-mix(in srgb, var(--ac) 14%, transparent); color: var(--ac); }
 .menu-group { padding: 6px 10px 2px; font-size: var(--t-xs); color: var(--mut); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Kilométeróra */
+.kmrow { display: flex; align-items: center; gap: 8px; margin-bottom: var(--s3); }
+.kmrow input { flex: 1; min-width: 0; }
+.kmrow .arrowc { color: var(--mut); }
+.kmedit { margin: 6px 0 2px 12px; display: flex; flex-direction: column; gap: 4px; }
+.kmedit .kmrow { margin-bottom: 0; }
+.kmline { font-variant-numeric: tabular-nums; }
+.monthkm { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); padding: 0 var(--s4) 6px; }

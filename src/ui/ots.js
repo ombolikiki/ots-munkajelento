@@ -109,26 +109,32 @@ function workTable() {
 
 // ---------- Költségelszámolás ----------
 
-const mapButtons = (r) => (r.mapRoutes || r.routes).map((route, i) => { const url = M.mapsURL(route);
-  return url ? `<a class="btn small ghost" href="${esc(url)}" target="_blank" rel="noopener" title="Megnyitja a Google Maps többpontos útvonalát a kilométer kiszámításához">${icon("map", 1)} ${r.routes.length > 1 ? "Térkép " + (i + 1) : "Google Maps"}</a>` : ""; }).join("");
+/** Google Maps gomb: csak ott, ahol a tracker nem ad teljes km-állást (mindkettő megvan: nem kell Maps). */
+const mapButtons = (r) => {
+  if (M.costKm(r) != null) return "";
+  const url = M.mapsURL(r.mapPoints);
+  return url ? `<a class="btn small ghost" href="${esc(url)}" target="_blank" rel="noopener" title="Megnyitja a Google Maps többpontos útvonalát a kilométer kiszámításához">${icon("map", 1)} Google Maps</a>` : "";
+};
+const tripTitle = (r) => (r.count > 1 ? ` · ${r.index + 1}. út` : "");
 
 function costRows() { return M.costRows(ctx.S.entries, ui.ots.y, ui.ots.m, ctx.S.settings.home); }
 
 function costList() {
   const rows = costRows();
   if (!rows.length) return empty("Ebben a hónapban nincs Utazás bejegyzés.");
-  return `<div class="olist">${rows.map((r) => `<div class="ocard"><div class="ohead">${doneBtn("c|" + r.key, M.costSignature(r))}<strong>${esc(formatLong(r.key))}</strong><span class="grow"></span>${mapButtons(r)}</div>
+  return `<div class="olist">${rows.map((r) => `<div class="ocard"><div class="ohead">${doneBtn("c|" + M.costRowKey(r), M.costSignature(r))}<strong>${esc(formatLong(r.key) + tripTitle(r))}</strong><span class="grow"></span>${mapButtons(r)}</div>
     <div class="oline top"><i class="cbar" style="background:${colorFor("TRAVEL")}"></i><div><div class="oline"><span class="lbl">Útvonal</span>${copyable(M.costRoute(r), { bold: true })}</div>
-    <div class="oline"><span class="lbl">Tevékenység</span>${r.activity ? copyable(r.activity, { bold: true }) : `<span class="small mut">(nincs)</span>`}</div></div></div>
-    ${r.routes.length > 1 ? `<p class="small warnt">${icon("alert", 0.95)} Több útvonal ugyanazon a napon: az OTS egy sorába ` + "` ; `" + `-vel elválasztva írd, a kilométer a részútvonalak összege.</p>` : ""}</div>`).join("")}</div>`;
+    <div class="oline"><span class="lbl">Tevékenység</span>${r.activity ? copyable(r.activity, { bold: true }) : `<span class="small mut">(nincs)</span>`}</div>
+    ${M.kmLabel(r) ? `<div class="oline"><span class="lbl">Km-óra</span>${copyable(M.kmLabel(r), { bold: true })}</div>` : ""}</div></div>
+    ${r.count > 1 && r.index === 0 ? `<p class="small warnt">${icon("alert", 0.95)} Ezen a napon több út van: az OTS-ben kapcsold be a „Naponta több sor” pipát, és minden utat külön sorba vigyél fel (Hozzáadás, majd a Nap kiválasztása).</p>` : ""}</div>`).join("")}</div>`;
 }
 
 function costTable() {
   const rows = costRows();
   if (!rows.length) return empty("Ebben a hónapban nincs Utazás bejegyzés.");
-  return `<div class="otable cost"><div class="orow head"><span class="c-chk"></span><span class="c-day">Dátum</span><span class="c-route">Útvonal</span><span class="c-act">Tevékenység</span><span class="c-map">Kilométer</span></div>
-    ${rows.map((r) => `<div class="orow ${ctx.store.isDone("c|" + r.key, M.costSignature(r)) ? "done" : ""}"><span class="c-chk">${doneBtn("c|" + r.key, M.costSignature(r))}</span><span class="c-day">${dayOfMonth(r.key)}. ${esc(dayName(r.key))}</span>
-    <span class="c-route"><i class="cbar" style="background:${colorFor("TRAVEL")}"></i>${copyable(M.costRoute(r))}</span><span class="c-act">${copyable(r.activity)}</span><span class="c-map">${r.routes.some((p) => p.length >= 2) ? mapButtons(r) : ""}</span></div>`).join("")}</div>`;
+  return `<div class="otable cost"><div class="orow head"><span class="c-chk"></span><span class="c-day">Dátum</span><span class="c-route">Útvonal</span><span class="c-act">Tevékenység</span><span class="c-kmo">Km-óra</span><span class="c-map">Kilométer</span></div>
+    ${rows.map((r) => `<div class="orow ${ctx.store.isDone("c|" + M.costRowKey(r), M.costSignature(r)) ? "done" : ""}"><span class="c-chk">${doneBtn("c|" + M.costRowKey(r), M.costSignature(r))}</span><span class="c-day">${dayOfMonth(r.key)}. ${esc(dayName(r.key))}${r.count > 1 ? ` (${r.index + 1}.)` : ""}</span>
+    <span class="c-route"><i class="cbar" style="background:${colorFor("TRAVEL")}"></i>${copyable(M.costRoute(r))}</span><span class="c-act">${copyable(r.activity)}</span><span class="c-kmo">${copyable(M.kmLabel(r))}</span><span class="c-map">${r.points.length >= 2 ? mapButtons(r) : ""}</span></div>`).join("")}</div>`;
 }
 
 // ---------- Létszámjelentő ----------
@@ -165,21 +171,21 @@ function attBody() {
 function progress() {
   const ds = ctx.S.settings.otsDataset;
   if (ds === "work") { const rows = workRows().filter(live); return `${rows.filter((r) => ctx.store.isDone("w|" + r.key, M.workSignature(r))).length}/${rows.length} nap felvíve`; }
-  if (ds === "cost") { const rows = costRows(); return `${rows.filter((r) => ctx.store.isDone("c|" + r.key, M.costSignature(r))).length}/${rows.length} nap felvíve`; }
+  if (ds === "cost") { const rows = costRows(); return `${rows.filter((r) => ctx.store.isDone("c|" + M.costRowKey(r), M.costSignature(r))).length}/${rows.length} sor felvíve`; }
   const rows = attRows().filter((r) => r.report);
   return `${rows.filter((r) => ctx.store.isDone("l|" + r.key + "|" + r.congregation, M.attendanceSignature(r))).length}/${rows.length} jelentés felvíve`;
 }
 
 const HINTS = {
   work: "Kattints egy értékre a vágólapra másoláshoz, a körre pedig a „felvittem” jelöléshez. A saját kategóriák nem vihetők az OTS-be.",
-  cost: "Az útvonalat másold az OTS-be; a kilométert a Google Maps gombbal számolhatod ki (autóval, a leggyorsabb út, felfelé kerekítve).",
+  cost: "Minden út külön sor. Az útvonalat másold az OTS-be; ha a km-óra állása megvan, azt írd az Ind. km és Érk. km mezőbe, különben a kilométert a Google Maps gombbal számolhatod ki (autóval, a leggyorsabb út, felfelé kerekítve).",
   attendance: "Kattints egy számra a másoláshoz, a körre pedig a „felvittem” jelöléshez.",
 };
 
 export function otsHTML() {
   const s = ctx.S.settings, ds = s.otsDataset, view = s.otsView;
   const body = ds === "work" ? (view === "calendar" ? monthGrid((d) => workChips(d, workRows())) : view === "list" ? workList() : workTable())
-    : ds === "cost" ? (view === "calendar" ? monthGrid((day) => { const r = costRows().find((x) => x.key === day); return r ? r.routes.map((p) => ({ text: p.join(" → "), color: colorFor("TRAVEL") })) : []; }) : view === "list" ? costList() : costTable())
+    : ds === "cost" ? (view === "calendar" ? monthGrid((day) => { return costRows().filter((x) => x.key === day).map((r) => ({ text: r.points.join(" → "), color: colorFor("TRAVEL") })); }) : view === "list" ? costList() : costTable())
     : attBody();
   const t = parseYMD(todayYMD());
   return `<div class="modalhead"><div class="mtool"><div class="seg wide">${DATASETS.map(([id, label, ic]) => `<button data-action="otsSet" data-key="otsDataset" data-value="${id}" aria-pressed="${ds === id}">${icon(ic, 1)} ${label}</button>`).join("")}</div>

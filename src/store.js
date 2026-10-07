@@ -2,6 +2,7 @@
 // a bejegyzések, a létszámjelentések és a mutatófájl automatikusan a mappába is íródnak (lásd folder.js).
 import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft, migrateDraft, clampStart, wholeDayEntry } from "./entries.js";
 import { parseYMD } from "./dates.js";
+import { lastEndKm, kmValue, kmProblem, monthKm } from "./entries.js";
 import { isWholeDay, configureTypes, lookupByCode, BUILTIN_TYPES, makeCustomCode, normalizeHex, UNIT } from "./types.js";
 import { encodeBytes, decode } from "./csv.js";
 import * as ATT from "./attendance.js";
@@ -30,7 +31,7 @@ export const DEFAULT_SETTINGS = {
   pomo: P.POMO_DEFAULTS, soundPomoEnd: "glass", soundBreakEnd: "ping", notifications: true,
   attendanceEnabled: false, congregations: [],
   customCategories: [], hiddenTypes: [], categoryColors: {},
-  suggestions: true, otsRules: false, otsDataset: "work", otsView: "table",
+  suggestions: true, kmTrack: false, otsRules: false, otsDataset: "work", otsView: "table",
   dataPath: "",
   syncEnabled: false, syncCalendars: [], syncDays: 60, syncDismissed: [],
   skill: { userName: "", site: "det", home: "", congregations: "", tasks: [], targets: ["claude"], os: "" },
@@ -70,7 +71,7 @@ export function sanitizeSettings(raw) {
     notifications: r.notifications === undefined ? d.notifications : !!r.notifications,
     attendanceEnabled: !!r.attendanceEnabled, congregations: ATT.cleanCongregations(r.congregations),
     customCategories: custom, hiddenTypes: hidden, categoryColors: colors,
-    suggestions: r.suggestions === undefined ? d.suggestions : !!r.suggestions, otsRules: !!r.otsRules, otsDataset: oneOf(r.otsDataset, OTS_DATASETS, d.otsDataset), otsView: oneOf(r.otsView, OTS_VIEWS, d.otsView),
+    suggestions: r.suggestions === undefined ? d.suggestions : !!r.suggestions, kmTrack: !!r.kmTrack, otsRules: !!r.otsRules, otsDataset: oneOf(r.otsDataset, OTS_DATASETS, d.otsDataset), otsView: oneOf(r.otsView, OTS_VIEWS, d.otsView),
     dataPath: str(r.dataPath),
     syncEnabled: !!r.syncEnabled, syncCalendars: strList(r.syncCalendars), syncDays: int(r.syncDays, 1, 730, d.syncDays), syncDismissed: strList(r.syncDismissed),
     skill: {
@@ -114,9 +115,26 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
   };
   if (!state.timer || typeof state.timer.startMs !== "number") state.timer = null;
   state.draft.quantity = int(state.draft.quantity, 1, 99, 1);
+  state.draft.startKm = String(state.draft.startKm ?? ""); state.draft.endKm = String(state.draft.endKm ?? "");
   configureTypes({ custom: state.settings.customCategories, hidden: state.settings.hiddenTypes, colors: state.settings.categoryColors });
 
-  const fieldsComplete = () => !missingHint(state.draft);
+  const kmCtx = (day) => ({ entries: state.entries, day: day || todayYMD() });
+  const fieldsComplete = (day) => !missingHint(state.draft, kmCtx(day));
+  /** Az induló km az utolsó rögzített érkező km-mel töltődik elő (ha a mező üres). */
+  const prefillKm = () => {
+    if (state.draft.startKm) return;
+    const k = lastEndKm(state.entries);
+    if (k != null) { state.draft.startKm = String(k); write(KEYS.draft, state.draft); }
+  };
+  prefillKm();
+  /** Ha az induló km a (régi) utolsó érkező állás előtöltése volt, a változás után az újjal frissül; kézzel írt érték marad. */
+  const refreshKmPrefill = (oldLast) => {
+    if (state.draft.startKm === "" || state.draft.startKm === String(oldLast ?? "")) {
+      const k = lastEndKm(state.entries);
+      state.draft.startKm = k == null ? "" : String(k);
+      write(KEYS.draft, state.draft);
+    }
+  };
   let needsBackup = false;
 
   // ---------- Mappa-szinkron ----------
@@ -190,6 +208,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
               state.meta.dirty = true;
             } else state.entries = sortEntries(entries);
             for (const e of state.entries) state.places = learnPlaces(state.places, e);
+            prefillKm();
             state.meta.entriesMod = ef.modified;
             state.sync.error = null;
           } catch (e) {
@@ -230,7 +249,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     // ---------- Űrlap ----------
     saveDraft() { write(KEYS.draft, state.draft); },
     setDraftType(code) { state.draft = applyType(state.draft, code, state.settings.home); write(KEYS.draft, state.draft); },
-    resetDraft() { state.draft = clearedDraft(state.draft); write(KEYS.draft, state.draft); },
+    resetDraft() { state.draft = clearedDraft(state.draft, ""); prefillKm(); write(KEYS.draft, state.draft); },
 
     // ---------- Beállítások ----------
     saveSettings(patch) {
@@ -264,8 +283,33 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       api.addEntry(entry);
       return { ok: true, entry };
     },
+    /**
+     * Egy már rögzített út km-állásának javítása. Hibás értéknél a hibaüzenetet adja vissza (és nem módosít), siker esetén null.
+     * Az „előző út” a lista e bejegyzés előtti utolsó érkező km-es eleme.
+     */
+    updateKm(id, startText, endText) {
+      const i = state.entries.findIndex((e) => e.id === id);
+      if (i < 0) return "A bejegyzés nem található.";
+      if (state.entries[i].type !== "TRAVEL") return "Csak az Utazás bejegyzéshez adható km-állás.";
+      const s = kmValue(startText), e = kmValue(endText);
+      if (!s.valid || !e.valid) return "A km-állás egész szám legyen.";
+      let previous = null;
+      for (let k = i - 1; k >= 0; k--) if (state.entries[k].endKm != null) { previous = state.entries[k].endKm; break; }
+      const problem = kmProblem(s.value, e.value, previous);
+      if (problem) return problem;
+      const oldLast = lastEndKm(state.entries);
+      state.entries = state.entries.map((x, k) => (k === i ? { ...x, startKm: s.value, endKm: e.value } : x));
+      refreshKmPrefill(oldLast);
+      write(KEYS.entries, state.entries);
+      scheduleFlush();
+      return null;
+    },
+    /** A hónap (a megadott napé) autós km-ei: az utak összege (csak a mindkét állással rögzítettek), és hány útból hiányzik valamelyik állás. */
+    monthKm(day) { return monthKm(state.entries, day); },
     deleteEntry(id) {
+      const oldLast = lastEndKm(state.entries);
       state.entries = state.entries.filter((e) => e.id !== id);
+      refreshKmPrefill(oldLast);
       const ok = write(KEYS.entries, state.entries);
       scheduleFlush();
       return ok;
@@ -290,7 +334,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
         catch (e) { return { ok: false, error: `A szinkron előtti másolat nem készült el, ezért nem módosítottam az adatokat: ${e?.message || e}` }; }
       }
       const upd = new Map(update.map((e) => [e.id, e]));
-      let list = state.entries.filter((e) => !remove.has(e.id)).map((e) => upd.get(e.id) || e);
+      let list = state.entries.filter((e) => !remove.has(e.id)).map((e) => (upd.has(e.id) ? { ...upd.get(e.id), startKm: e.startKm ?? null, endKm: e.endKm ?? null } : e));   // a kézzel rögzített km-állás megmarad
       for (const e of add) state.places = learnPlaces(state.places, e);
       state.entries = sortEntries([...list, ...add]);
       write(KEYS.places, state.places);
@@ -367,7 +411,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     /** plannedMs: előre megadott, korábbi kezdés (legfeljebb a mai nap elejéig, jövőbeli nem lehet). */
     startTimer(nowMs = Date.now(), plannedMs = null) {
       const type = draftType(state.draft);
-      if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft)) return false;
+      if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft, kmCtx())) return false;
       state.timer = { startMs: plannedMs == null ? nowMs : clampStart(plannedMs, nowMs) };
       return write(KEYS.timer, state.timer);
     },
@@ -378,7 +422,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       return write(KEYS.timer, state.timer);
     },
     stopTimer(nowMs = Date.now()) {
-      if (!state.timer || missingHint(state.draft)) return null;
+      if (!state.timer || missingHint(state.draft, kmCtx())) return null;
       const entry = timedEntry(state.draft, state.timer.startMs, Math.max(nowMs, state.timer.startMs));
       state.timer = null;
       write(KEYS.timer, null);
@@ -391,7 +435,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     // ---------- Pomodoro ----------
     startPomo(nowMs = Date.now()) {
       const type = draftType(state.draft);
-      if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft)) return false;
+      if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft, kmCtx())) return false;
       state.pomo = P.begin(state.pomo, "work", nowMs, state.settings.pomo);
       return write(KEYS.pomo, state.pomo);
     },

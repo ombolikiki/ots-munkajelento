@@ -177,3 +177,47 @@ test("a Cél kiegészítése és a hely szövege az űrlapon", () => {
   assert.equal(E.placeText("Tata", null), "Tata");
   assert.equal(E.placeText("Tata", "Fő út 1., II. emelet, Tata"), "Tata, Fő út 1., II. emelet");
 });
+
+// ---------- Kilométeróra ----------
+const tripEntry = (id, date, s, en) => ({ id, date, type: "TRAVEL", startKm: s, endKm: en });
+
+test("km-érték: üres rendben, szóköz megengedett, hibás érték jelzett", () => {
+  assert.deepEqual(E.kmValue(""), { value: null, valid: true });
+  assert.deepEqual(E.kmValue("  "), { value: null, valid: true });
+  assert.deepEqual(E.kmValue("123 456"), { value: 123456, valid: true });
+  assert.deepEqual(E.kmValue("0"), { value: 0, valid: true }); assert.deepEqual(E.kmValue("9999999"), { value: 9999999, valid: true });
+  for (const bad of ["abc", "-1", "1e99", "inf", "nan", "10000000", "12x"]) assert.equal(E.kmValue(bad).valid, false, bad);
+});
+
+test("km-ellenőrzés: az érkező nagyobb az indulónál, az induló nem kisebb az előző út végállásánál", () => {
+  assert.equal(E.kmProblem(1000, 1060, null), null);
+  assert.equal(E.kmProblem(null, null, 1000), null);   // mindkettő opcionális
+  assert.match(E.kmProblem(1000, 1000, null), /nagyobbnak kell lennie/); assert.match(E.kmProblem(1000, 900, null), /nagyobbnak kell lennie/);
+  assert.match(E.kmProblem(900, 950, 1000), /Az induló km-állás \(900\) kisebb, mint az előző út érkező állása \(1000\)\./);
+  assert.equal(E.kmProblem(1000, 1050, 1000), null);   // az egyenlő rendben van
+  assert.match(E.kmProblem(null, 1000, 1000), /Az érkező km-állás \(1000\) nem lehet kisebb/); assert.equal(E.kmProblem(null, 1001, 1000), null);
+});
+
+test("km: előző út a napig (bezárólag), előtöltés, az Utazás űrlap hibája és a rögzítés tiltása", () => {
+  const list = [tripEntry("a", "2026-10-01", 1000, 1060), tripEntry("b", "2026-10-03", 1060, 1100), { id: "m", date: "2026-10-04", type: "MEETING", startKm: null, endKm: null }, tripEntry("c", "2026-10-05", 1100, null)];
+  assert.equal(E.lastEndKm(list), 1100); assert.equal(E.lastEndKm([]), null);
+  assert.equal(E.previousEndKm(list, "2026-10-04"), 1100); assert.equal(E.previousEndKm(list, "2026-10-02"), 1060); assert.equal(E.previousEndKm(list, "2026-09-30"), null);
+  assert.equal(E.previousEndKm(list, "2026-10-09", "b"), 1060);   // a javított bejegyzés nélkül
+  const d = (o) => travel({ startKm: "", endKm: "", ...o });
+  assert.equal(E.missingHint(d({ startKm: "1100", endKm: "1180" }), { entries: list, day: "2026-10-06" }), null);
+  assert.equal(E.missingHint(d({}), { entries: list, day: "2026-10-06" }), null);   // üresen rendben
+  assert.equal(E.missingHint(d({ startKm: "12a" }), { entries: list, day: "2026-10-06" }), "A km-állás egész szám legyen.");
+  assert.match(E.missingHint(d({ startKm: "1000" }), { entries: list, day: "2026-10-06" }), /kisebb, mint az előző út/);
+  assert.match(E.missingHint(d({ startKm: "1000" }), { entries: list, day: "2026-10-02" }), /kisebb, mint az előző út érkező állása \(1060\)/);   // az akkori előző állás 1060
+  assert.equal(E.missingHint(d({ startKm: "1060" }), { entries: list, day: "2026-10-02" }), null);
+  assert.match(E.missingHint(d({ endKm: "1100" }), { entries: list, day: "2026-10-06" }), /Az érkező km-állás \(1100\) nem lehet kisebb/);   // csak az érkező van meg
+  const bad = E.manualEntry(d({ startKm: "1200", endKm: "1100" }), { day: "2026-10-04", mode: "duration", hours: 0, minutes: 30, now, existing: list });
+  assert.equal(bad.ok, false); assert.match(bad.error, /nagyobbnak/);
+  const ok = E.manualEntry(d({ startKm: "1 200", endKm: "1260" }), { day: "2026-10-05", mode: "duration", hours: 0, minutes: 30, now, existing: list });
+  assert.ok(ok.ok, ok.error); assert.deepEqual([ok.entry.startKm, ok.entry.endKm, E.kmDriven(ok.entry)], [1200, 1260, 60]);
+  assert.deepEqual([E.kmDriven({ startKm: 5, endKm: null }), E.kmDriven({ startKm: 9, endKm: 5 }), E.kmDriven({ startKm: 5, endKm: 9 })], [null, null, 4]);
+  const plain = E.manualEntry(draft({ typeCode: "MEETING", workplace: "Győr", startKm: "1", endKm: "2" }), { day: "2026-10-04", mode: "duration", hours: 1, minutes: 0, now }).entry;
+  assert.deepEqual([plain.startKm, plain.endKm], [null, null]);   // nem Utazás soha nem kap km-et
+  assert.deepEqual(E.monthKm([...list, tripEntry("z", "2026-11-02", 1, 5)], "2026-10-15"), { km: 100, incomplete: 1 });
+  assert.equal(E.gate("manual", d({ startKm: "x" }), { entries: list, day: "2026-10-06" }).disabled, true);
+});

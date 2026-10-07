@@ -18,6 +18,10 @@ const hint = (text, id = "gateHint") => `<p class="hint" id="${id}" ${text ? "" 
 
 // ---------- Időzítő ----------
 
+/** Az „előző út” km-állásához: a bejegyzés napja (kézi bevitelnél a kiválasztott nap, a naptári résnél annak napja, egyébként a mai nap). */
+export const kmDay = () => (ui.mode === "manual" ? ui.day : ui.mode === "calendar" && ui.pending ? ui.pending.day : todayYMD());
+export const kmCtx = () => ({ entries: ctx.S.entries, day: kmDay() });
+
 const START_MINUTES = [5, 10, 15, 30];
 
 /** A Kezdés sora: óó:pp mező és a −5/−10/−15/−30 perc gombok; a „Most” visszaállít. Futás közben a futó időzítő kezdését javítja. */
@@ -45,13 +49,13 @@ export function setStartTime(value) {
 export function timerHTML() {
   const S = ctx.S, running = !!S.timer, pomoOn = P.isActive(S.pomo);
   const type = draftType(S.draft);
-  const g = gate("timer", S.draft);
+  const g = gate("timer", S.draft, kmCtx());
   const startHint = pomoOn ? "A Pomodoro fut, előbb állítsd le." : g.text;
   const elapsed = running ? Math.floor((ctx.now() - S.timer.startMs) / 1000) : 0;
   let h = fieldsHTML() + `<section class="card timer">${startRowHTML(running)}<div class="clockrow"><span class="pulse ${running ? "on" : ""}"></span><span class="clock" id="clock">${formatClock(elapsed)}</span></div>`;
   if (running) {
-    const hint2 = gate("manual", S.draft).text;
-    h += `<div class="btnrow">${bigBtn("stop", "timerStop", "stop", "Stop és mentés", !ctx.store.fieldsComplete(), "gateBtn")}<button class="linkbtn" data-action="timerDiscard">Elvetés</button></div>${hint(hint2)}`;
+    const hint2 = gate("manual", S.draft, kmCtx()).text;
+    h += `<div class="btnrow">${bigBtn("stop", "timerStop", "stop", "Stop és mentés", !ctx.store.fieldsComplete(kmDay()), "gateBtn")}<button class="linkbtn" data-action="timerDiscard">Elvetés</button></div>${hint(hint2)}`;
   } else {
     h += bigBtn("go", "timerStart", "play", "Start", !!startHint || !type, "gateBtn") + hint(startHint);
   }
@@ -101,13 +105,13 @@ export function refreshGate() {
   let disabled, text;
   if (ui.mode === "manual") { const r = manualResult(); disabled = !r.ok; text = r.ok ? "" : r.error; }
   else if (ui.mode === "timer") {
-    if (ctx.S.timer) { disabled = !ctx.store.fieldsComplete(); text = disabled ? gate("manual", ctx.S.draft).text : ""; }
-    else { const g = gate("timer", ctx.S.draft); disabled = g.disabled || P.isActive(ctx.S.pomo); text = P.isActive(ctx.S.pomo) ? "A Pomodoro fut, előbb állítsd le." : g.text; }
+    if (ctx.S.timer) { disabled = !ctx.store.fieldsComplete(kmDay()); text = disabled ? gate("manual", ctx.S.draft, kmCtx()).text : ""; }
+    else { const g = gate("timer", ctx.S.draft, kmCtx()); disabled = g.disabled || P.isActive(ctx.S.pomo); text = P.isActive(ctx.S.pomo) ? "A Pomodoro fut, előbb állítsd le." : g.text; }
   } else if (ui.mode === "pomodoro") {
-    const g = gate("timer", ctx.S.draft);
-    if (P.isActive(ctx.S.pomo)) { disabled = ctx.S.pomo.phase === "work" ? !ctx.store.fieldsComplete() : false; text = ctx.S.pomo.phase === "work" ? g.text : ""; }
+    const g = gate("timer", ctx.S.draft, kmCtx());
+    if (P.isActive(ctx.S.pomo)) { disabled = ctx.S.pomo.phase === "work" ? !ctx.store.fieldsComplete(kmDay()) : false; text = ctx.S.pomo.phase === "work" ? g.text : ""; }
     else { disabled = g.disabled || !!ctx.S.timer; text = ctx.S.timer ? "Az időzítő fut, előbb állítsd le." : g.text; }
-  } else if (ui.mode === "calendar" && ui.pending) { disabled = !ctx.store.fieldsComplete(); text = gate("manual", ctx.S.draft).text; }
+  } else if (ui.mode === "calendar" && ui.pending) { disabled = !ctx.store.fieldsComplete(kmDay()); text = gate("manual", ctx.S.draft, kmCtx()).text; }
   else return;
   btn.disabled = disabled;
   if (hintEl) { hintEl.querySelector("span").textContent = text; hintEl.hidden = !text; }
@@ -119,7 +123,7 @@ const RING_R = 52, RING_C = 2 * Math.PI * RING_R;
 
 export function pomodoroHTML() {
   const S = ctx.S, cfg = S.settings.pomo, st = S.pomo, active = P.isActive(st), now = ctx.now();
-  const g = gate("timer", S.draft);
+  const g = gate("timer", S.draft, kmCtx());
   const startHint = S.timer ? "Az időzítő fut, előbb állítsd le." : g.text;
   const prog = P.progress(st, now, cfg);
   const break_ = st.phase === "shortBreak" || st.phase === "longBreak";
@@ -127,7 +131,7 @@ export function pomodoroHTML() {
       <circle class="track" cx="60" cy="60" r="${RING_R}"/><circle class="rbar" id="ringBar" cx="60" cy="60" r="${RING_R}" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C * (1 - prog)}" transform="rotate(-90 60 60)"/></svg>
       <div class="ringtext"><span class="clock sm ${active ? "" : "mut"}" id="pomoClock">${formatClock(active ? P.remainingSeconds(st, now) : cfg.work * 60)}</span><span class="small mut" id="pomoPhase">${P.phaseTitle(st.phase)}</span></div></div>`;
   if (!active) h += bigBtn("go", "pomoStart", "play", "Pomo indítása", !!startHint || !draftType(S.draft), "gateBtn") + hint(startHint);
-  else if (st.phase === "work") h += `<div class="btnrow">${bigBtn("stop", "pomoStop", "stop", "Leállítás és mentés", !ctx.store.fieldsComplete(), "gateBtn")}<button class="linkbtn" data-action="pomoDiscard">Elvetés</button></div>${hint(ctx.store.fieldsComplete() ? "" : g.text)}`;
+  else if (st.phase === "work") h += `<div class="btnrow">${bigBtn("stop", "pomoStop", "stop", "Leállítás és mentés", !ctx.store.fieldsComplete(kmDay()), "gateBtn")}<button class="linkbtn" data-action="pomoDiscard">Elvetés</button></div>${hint(ctx.store.fieldsComplete(kmDay()) ? "" : g.text)}`;
   else h += `<div class="btnrow">${bigBtn("accent", "pomoSkip", "forward", "Szünet kihagyása")}<button class="linkbtn" data-action="pomoStop">Leállítás</button></div>`;
   h += `<div class="pomofoot"><span class="small mut">Elvégzett pomo: ${st.done}</span>${st.done > 0 ? `<button class="linkbtn acc small" data-action="pomoReset">Nulláz</button>` : ""}
       <span class="grow"></span><button class="linkbtn acc small" data-action="pomoSettings">${icon(ui.pomoSettings ? "chevU" : "gear", 0.95)} Pomo beállítások</button></div>`;

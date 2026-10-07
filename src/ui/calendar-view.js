@@ -78,10 +78,10 @@ const slotLabel = (s) => `${hmFromMinutes(s.startMin)}–${hmFromMinutes(s.endMi
 export function pendingHTML() {
   const slot = ui.pending;
   if (!slot) return "";
-  const fc = ctx.store.fieldsComplete();
+  const fc = ctx.store.fieldsComplete(slot.day);
   return `<section class="card pending"><div class="pendhead">${icon("plus", 1.05)}<strong>Új bejegyzés: ${esc(formatShort(slot.day))}, ${slotLabel(slot)}</strong></div></section>
     ${fieldsHTML()}<section class="card"><div class="btnrow"><button class="big accent" id="gateBtn" data-action="calCommit" ${fc ? "" : "disabled"}>${icon("check", 1.05)}<span>Rögzítés</span></button>
-    <button class="linkbtn" data-action="calCancel">Mégse</button></div><p class="hint" id="gateHint" ${fc ? "hidden" : ""}>${icon("exclam", 0.95)}<span>${esc(gate("manual", ctx.S.draft).text)}</span></p></section>`;
+    <button class="linkbtn" data-action="calCancel">Mégse</button></div><p class="hint" id="gateHint" ${fc ? "hidden" : ""}>${icon("exclam", 0.95)}<span>${esc(gate("manual", ctx.S.draft, { entries: ctx.S.entries, day: slot.day }).text)}</span></p></section>`;
 }
 
 export const actions = {
