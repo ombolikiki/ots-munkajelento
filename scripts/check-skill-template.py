@@ -7,7 +7,7 @@ import json, os, re, sys
 
 root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skill-template", "ots-adminisztracio"))
 errors = []
-BAD = ("Ömböli", "Krisztián", "Győr", "Tatabánya", "Tata,", "Oláh", "Sáfrány", "Toggl", "toggl", "Claude_Browser",
+BAD = ("Ömböli", "Krisztián", "Győr", "Tatabánya", "Tata,", "Toggl", "toggl", "Claude_Browser",
        "ots.detkapu.hu", "ots.tetkapu.hu", "DETKAPU", "detkapu-adminisztracio")
 KNOWN = {"FELHASZNALO_NEVE", "SZEKHELY", "GYULEKEZETEK", "BONGESZO", "OTS_URL", "OTS_NEV"}
 

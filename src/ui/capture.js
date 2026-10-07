@@ -121,6 +121,9 @@ export function refreshGate() {
 
 const RING_R = 52, RING_C = 2 * Math.PI * RING_R;
 
+/** A munkamenet eddigi ideje óó:pp. */
+const sessionClock = (st, nowMs) => formatHM(P.sessionElapsed(st, nowMs) ?? 0);
+
 export function pomodoroHTML() {
   const S = ctx.S, cfg = S.settings.pomo, st = S.pomo, active = P.isActive(st), now = ctx.now();
   const g = gate("timer", S.draft, kmCtx());
@@ -133,11 +136,12 @@ export function pomodoroHTML() {
   if (!active) h += bigBtn("go", "pomoStart", "play", "Pomo indítása", !!startHint || !draftType(S.draft), "gateBtn") + hint(startHint);
   else if (st.phase === "work") h += `<div class="btnrow">${bigBtn("stop", "pomoStop", "stop", "Leállítás és mentés", !ctx.store.fieldsComplete(kmDay()), "gateBtn")}<button class="linkbtn" data-action="pomoDiscard">Elvetés</button></div>${hint(ctx.store.fieldsComplete(kmDay()) ? "" : g.text)}`;
   else h += `<div class="btnrow">${bigBtn("accent", "pomoSkip", "forward", "Szünet kihagyása")}<button class="linkbtn" data-action="pomoStop">Leállítás</button></div>`;
-  h += `<div class="pomofoot"><span class="small mut">Elvégzett pomo: ${st.done}</span>${st.done > 0 ? `<button class="linkbtn acc small" data-action="pomoReset">Nulláz</button>` : ""}
+  h += `<div class="pomofoot"><span class="small mut">Elvégzett pomo: ${st.done}</span>${st.session ? `<span class="small mut" title="A munkamenet (a pomók és a szünetek együtt) eddigi ideje; egyetlen bejegyzésként rögzül">· munkamenet: <b id="pomoSession">${sessionClock(st, now)}</b></span>` : ""}${st.done > 0 ? `<button class="linkbtn acc small" data-action="pomoReset">Nulláz</button>` : ""}
       <span class="grow"></span><button class="linkbtn acc small" data-action="pomoSettings">${icon(ui.pomoSettings ? "chevU" : "gear", 0.95)} Pomo beállítások</button></div>`;
   if (ui.pomoSettings) {
     const step = (key, title, lo, hi) => `<div class="setrow"><span>${title}</span><div class="stepper"><button class="step" data-action="pomoStep" data-key="${key}" data-d="-1" ${cfg[key] <= lo ? "disabled" : ""}>−</button><span class="val">${cfg[key]}</span><button class="step" data-action="pomoStep" data-key="${key}" data-d="1" ${cfg[key] >= hi ? "disabled" : ""}>+</button></div></div>`;
     h += `<div class="subcard">${step("work", "Pomo hossza (perc)", 1, 180)}${step("short", "Rövid szünet (perc)", 1, 60)}${step("long", "Hosszú szünet (perc)", 1, 120)}${step("every", "Hosszú szünet minden … pomo után", 2, 12)}
+      <label class="check" title="Bekapcsolva a pomók és a szünetek együtt egyetlen bejegyzést adnak (Kezdés = az első pomo indítása, Vége = a munkamenet vége); a mezők a munkamenet alatt zároltak. Kikapcsolva minden lejárt pomo külön bejegyzés, a szünet nem rögzül."><input type="checkbox" data-ns="pomo" data-field="merge" ${cfg.merge ? "checked" : ""}> A szünet is munkaidő, és a munkamenet egy bejegyzésben rögzül</label>
       <label class="check"><input type="checkbox" data-ns="pomo" data-field="autoBreak" ${cfg.autoBreak ? "checked" : ""}> A szünet automatikusan induljon</label>
       <label class="check"><input type="checkbox" data-ns="pomo" data-field="autoWork" ${cfg.autoWork ? "checked" : ""}> A következő pomo automatikusan induljon</label>
       <button class="linkbtn acc small" data-action="pomoDefaults">Alapértelmezett (25 / 5 / 15, minden 4.)</button>
@@ -152,7 +156,8 @@ export function tickDOM() {
   const c = $("#clock");
   if (c && S.timer) c.textContent = formatClock(Math.floor((now - S.timer.startMs) / 1000));
   if (P.isActive(S.pomo)) {
-    const pc = $("#pomoClock"), bar = $("#ringBar");
+    const pc = $("#pomoClock"), bar = $("#ringBar"), ps = $("#pomoSession");
+    if (ps && S.pomo.session) ps.textContent = sessionClock(S.pomo, now);
     if (pc) pc.textContent = formatClock(P.remainingSeconds(S.pomo, now));
     if (bar) bar.setAttribute("stroke-dashoffset", String(RING_C * (1 - P.progress(S.pomo, now, S.settings.pomo))));
   }
@@ -183,7 +188,7 @@ export const actions = {
   timerDiscard() { if (confirm("Elveted a futó időmérést?")) { ctx.store.discardTimer(); ui.plannedStart = null; } },
   pomoStart() { askNotifications(); if (!ctx.store.startPomo(ctx.now())) ctx.say("Töltsd ki a kötelező mezőket.", true); },
   pomoStop() { const e = ctx.store.stopPomo(ctx.now()); if (e) ctx.say(`Mentve: ${e.typeLabel}, ${formatHM(e.durationSeconds)}.`); },
-  pomoDiscard() { if (confirm("Elveted a futó pomót?")) ctx.store.discardPomo(); },
+  pomoDiscard() { if (confirm("Elveted a futó pomót? (A munkamenet korábbi pomói és szünetei bekerülnek.)")) ctx.store.discardPomo(); },
   pomoSkip() { ctx.store.skipPomoBreak(ctx.now()); },
   pomoReset() { ctx.store.resetPomoCounter(); },
   pomoSettings() { ui.pomoSettings = !ui.pomoSettings; },

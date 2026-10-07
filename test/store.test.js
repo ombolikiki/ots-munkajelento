@@ -64,31 +64,92 @@ test("típusváltás: Utazásnál a székhely az alapérték, mennyiség nélkü
   s.setDraftType("VISITING"); fill(s, { quantity: 4 }); s.setDraftType("VISITING"); assert.equal(s.state.draft.quantity, 4);
 });
 
-test("Pomodoro: indítás, a munkaszakasz végén automatikus mentés, leállítás részidővel", () => {
-  const s = createStore(memory());
-  fill(s, { typeCode: "PREPARING", workplace: "Mór", activity: "Prédikáció" });
-  const t0 = new Date(2026, 9, 5, 9, 0, 0).getTime();
-  assert.equal(s.startPomo(t0), true); assert.equal(s.startTimer(t0), false);
-  assert.equal(s.tickPomo(t0 + 1000), null);
-  const r = s.tickPomo(t0 + 25 * 60000);
-  assert.equal(r.notify.title, "Pomo vége"); assert.equal(r.entry.source, "pomodoro"); assert.equal(r.entry.durationSeconds, 1500); assert.equal(r.entry.start, "09:00:00");
-  assert.equal(s.state.pomo.phase, "shortBreak"); assert.equal(s.state.pomo.done, 1);
-  assert.equal(s.state.draft.typeCode, "PREPARING");   // a következő pomóhoz az űrlap megmarad
-  const b = s.tickPomo(t0 + 30 * 60000);
+const T0 = new Date(2026, 9, 5, 9, 0, 0).getTime(), MIN = 60000;
+const mkStore = (pomo = {}, st = memory()) => { const s = createStore(st); s.saveSettings({ pomo: { work: 1, short: 1, long: 1, every: 2, ...pomo } }); fill(s, { typeCode: "PREPARING", workplace: "Mór", activity: "Prédikáció" }); return s; };
+
+test("Pomodoro-munkamenet: pomo + szünet egy bejegyzés, a mezők a munkamenet elejéről, zárolás alatt az űrlap megmarad", () => {
+  const s = mkStore();
+  assert.equal(s.startPomo(T0), true); assert.equal(s.startTimer(T0), false);
+  fill(s, { workplace: "Más" });   // a bejegyzés a munkamenet ELEJÉN megadott mezőket kapja
+  assert.equal(s.tickPomo(T0 + 1000), null);
+  const r = s.tickPomo(T0 + MIN);
+  assert.equal(r.notify.title, "Pomo vége"); assert.equal(r.entry, null); assert.equal(s.state.entries.length, 0);   // munkamenet közben még nincs bejegyzés
+  assert.equal(s.state.pomo.phase, "shortBreak"); assert.equal(s.state.pomo.done, 1); assert.equal(s.state.draft.typeCode, "PREPARING");
+  const b = s.tickPomo(T0 + 2 * MIN);
   assert.equal(b.notify.title, "A szünet véget ért"); assert.equal(s.state.pomo.phase, "idle");
-  s.startPomo(t0 + 31 * 60000);
-  const part = s.stopPomo(t0 + 31 * 60000 + 10 * 60000);
-  assert.equal(part.durationSeconds, 600); assert.equal(s.state.entries.length, 2); assert.equal(s.state.draft.typeCode, "");
-  fill(s, { typeCode: "PREPARING", workplace: "Mór" }); s.startPomo(t0 + 99 * 60000);
-  assert.equal(s.stopPomo(t0 + 99 * 60000 + 5000), null); assert.equal(s.state.entries.length, 2);   // 30 mp alatt nem ment
+  assert.equal(s.state.entries.length, 1);
+  const e = s.state.entries[0];
+  assert.deepEqual([e.source, e.unit, e.durationSeconds, e.start, e.end, e.workplace, e.activity, e.typeLabel], ["pomodoro", "ora", 120, "09:00:00", "09:02:00", "Mór", "Prédikáció", "Felkészülés"]);
+  assert.equal(s.state.draft.typeCode, "PREPARING");   // természetes lezáráskor a mezők megmaradnak
   s.resetPomoCounter(); assert.equal(s.state.pomo.done, 0);
 });
 
-test("a Pomodoro állapota túléli az újratöltést", () => {
-  const st = memory(); const a = createStore(st);
-  fill(a, { typeCode: "MEETING", workplace: "Győr" }); a.startPomo(5000);
+test("Pomodoro-munkamenet: leállítás szünet közben 90 mp, az űrlap kiürül; 30 mp alatt nincs bejegyzés", () => {
+  const s = mkStore();
+  s.startPomo(T0); s.tickPomo(T0 + MIN);
+  const part = s.stopPomo(T0 + MIN + 30_000);
+  assert.equal(part.durationSeconds, 90); assert.equal(s.state.entries.length, 1); assert.equal(s.state.draft.typeCode, ""); assert.equal(s.state.pomo.phase, "idle");
+  fill(s, { typeCode: "PREPARING", workplace: "Mór" }); s.startPomo(T0 + 99 * MIN);
+  assert.equal(s.stopPomo(T0 + 99 * MIN + 20_000), null); assert.equal(s.state.entries.length, 1);
+});
+
+test("Pomodoro-munkamenet: automatikus indítással egy bejegyzés 240 mp, a hosszú szünet vége lezár", () => {
+  const s = mkStore({ autoWork: true });
+  s.startPomo(T0);
+  for (let t = T0 + 1000; t <= T0 + 5 * MIN; t += 1000) { s.tickPomo(t); if (!s.state.pomo.session && s.state.pomo.phase === "idle") break; }
+  assert.equal(s.state.pomo.phase, "idle"); assert.equal(s.state.entries.length, 1); assert.equal(s.state.entries[0].durationSeconds, 240); assert.equal(s.state.pomo.done, 2);
+});
+
+test("Pomodoro-munkamenet: elvetés a 2. pomo közben, altatás (45 mp), időugrás (40 mp + 1 óra)", () => {
+  let s = mkStore({ autoWork: true, every: 3 });
+  s.startPomo(T0); s.tickPomo(T0 + MIN); s.tickPomo(T0 + 2 * MIN);
+  assert.equal(s.state.pomo.phase, "work");
+  assert.equal(s.discardPomo().durationSeconds, 120); assert.equal(s.state.entries.length, 1);
+  s = mkStore();
+  s.startPomo(T0);
+  const slept = s.sleepPomo(T0 + 45_000);   // a rendszer altatási jelzése
+  assert.equal(slept.durationSeconds, 45); assert.equal(s.state.pomo.phase, "idle"); assert.equal(s.state.draft.typeCode, "PREPARING");   // a mezők megmaradnak
+  assert.equal(s.startPomo(T0 + 3600_000), true);   // új pomo indítható
+  s = mkStore();
+  s.startPomo(T0);
+  assert.equal(s.tickPomo(T0 + 40_000), null);
+  const j = s.tickPomo(T0 + 40_000 + 3600_000);   // 1 órás ugrás: a munkamenet a legutóbbi ütemnél (40 mp) zárul
+  assert.equal(j.slept, true); assert.equal(s.state.entries.length, 1); assert.equal(s.state.entries[0].durationSeconds, 40); assert.equal(s.state.pomo.phase, "idle");
+  s = mkStore();
+  s.startPomo(T0); for (let t = T0 + 1000; t <= T0 + 200_000; t += 1000) s.tickPomo(t);   // másodpercenkénti ütemek: nincs téves altatás
+  assert.equal(s.state.entries.length, 1);
+  s = mkStore(); s.startPomo(T0); s.tickPomo(T0 + 20_000);
+  assert.equal(s.tickPomo(T0 + 20_000 + 130_000).slept, true); assert.equal(s.state.entries.length, 0);   // az ugrás előtti 20 mp < 30 mp: nem rögzül
+});
+
+test("Pomodoro-munkamenet: folyamatos mentés és helyreállítás (a fül bezárása, összeomlás) az életjelig", () => {
+  const st = memory(), a = mkStore({}, st);
+  a.startPomo(T0);
+  for (let t = T0 + 1000; t <= T0 + 55_000; t += 1000) a.tickPomo(t);   // 10 másodpercenként életjel
+  assert.ok(JSON.parse(st.getItem(KEYS.pomo)).session.lastAlive >= T0 + 50_000);
+  const alive = JSON.parse(st.getItem(KEYS.pomo)).session.lastAlive;
+  const b = createStore(st);   // újratöltés: a munkamenet az utolsó életjelig rögzül
+  assert.equal(b.state.pomo.phase, "idle"); assert.equal(b.state.pomo.session, null);
+  assert.equal(b.state.entries.length, 1); assert.equal(b.state.entries[0].durationSeconds, Math.round((alive - T0) / 1000)); assert.equal(b.state.entries[0].source, "pomodoro");
+  assert.equal(createStore(st).state.entries.length, 1);   // a mentés törlődött: nem rögzül kétszer
+  const st2 = memory(), c = mkStore({}, st2); c.startPomo(T0); c.tickPomo(T0 + 10_000);   // 30 mp alatt a helyreállításnál sem
+  assert.equal(createStore(st2).state.entries.length, 0);
+});
+
+test("régi mód: pomónként külön bejegyzés, a szünet nem rögzül, a leállításkor a félbehagyott pomo ideje (30 mp-től); az állapot túléli az újratöltést", () => {
+  const st = memory(), s = mkStore({ merge: false }, st);
+  s.startPomo(T0);
+  const r = s.tickPomo(T0 + MIN);
+  assert.equal(r.entry.durationSeconds, 60); assert.equal(r.entry.source, "pomodoro"); assert.equal(r.entry.start, "09:00:00");
+  assert.equal(s.tickPomo(T0 + 2 * MIN).entry, null);   // a szünet nem rögzül
+  assert.equal(s.state.entries.length, 1);
+  s.startPomo(T0 + 10 * MIN);
+  assert.equal(s.stopPomo(T0 + 10 * MIN + 29_000), null);
+  fill(s, { typeCode: "PREPARING", workplace: "Mór" }); s.startPomo(T0 + 20 * MIN);
+  assert.equal(s.sleepPomo(T0 + 20 * MIN + 45_000).durationSeconds, 45);   // az altatás ilyenkor is menti a futó pomót
+  fill(s, { typeCode: "PREPARING", workplace: "Mór" }); s.startPomo(T0 + 30 * MIN);
   const b = createStore(st);
-  assert.equal(b.state.pomo.phase, "work"); assert.equal(b.state.pomo.start, 5000);
+  assert.equal(b.state.pomo.phase, "work"); assert.equal(b.state.pomo.start, T0 + 30 * MIN);
 });
 
 test("saját kategóriák, elrejtés, színek: mentés és visszatöltés", () => {

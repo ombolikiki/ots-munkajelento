@@ -349,3 +349,8 @@ button.cp:hover { background: color-mix(in srgb, var(--ac) 14%, transparent); co
 .kmedit .kmrow { margin-bottom: 0; }
 .kmline { font-variant-numeric: tabular-nums; }
 .monthkm { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); padding: 0 var(--s4) 6px; }
+
+/* Pomodoro-munkamenet: zárolt mezők */
+.fieldlock { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fieldlock[disabled] { opacity: .65; }
+.lockmsg { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }

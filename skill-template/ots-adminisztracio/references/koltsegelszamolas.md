@@ -66,7 +66,7 @@ Röviden foglald össze, mit végeztél el (melyik hónap). Ezután kérdezd meg
 
 ## Technikai tapasztalat (teszt 2026-10-02)
 
-- A Költségelszámolás oldal grid-je: `document.querySelector('iframe').contentWindow.$$('yo_Grid')`. Mezők: ROUTE (Útvonal), ACTIVITY (Tevékenység), TRAVEL_TYPE_ID (Típus, combo), START_KM (Ind. km), END_KM (Érk. km), DIFF (Megtett km, számolt), COST_CALC (Költség, számolt). Fülek: Főkönyv, Egyéb költségek, és az autó (pl. "NFH397 Ford Mondeo", ezen a fülön van az Útvonal tábla).
+- A Költségelszámolás oldal grid-je: `document.querySelector('iframe').contentWindow.$$('yo_Grid')`. Mezők: ROUTE (Útvonal), ACTIVITY (Tevékenység), TRAVEL_TYPE_ID (Típus, combo), START_KM (Ind. km), END_KM (Érk. km), DIFF (Megtett km, számolt), COST_CALC (Költség, számolt). Fülek: Főkönyv, Egyéb költségek, és az autó (pl. "ABC123 Opel Astra", ezen a fülön van az Útvonal tábla).
 - Bevitel ugyanúgy, mint a munkajelentőnél: `g.editCell(id,'ROUTE'); g.getEditor().getInputNode().value='...'; g.editStop();`. Az Útvonal rögzítése után kb. 1-2 mp múlva az `START_KM` automatikusan kitöltődik (a sor elmentésekor). Az `END_KM` megadása után a `DIFF` és a `COST_CALC` magától kiszámolódik.
 - Az `END_KM` = `START_KM` + a Google Maps km-ek.
 - Google Maps: `https://www.google.com/maps/dir/<Indulás>/<Munkahely1>/<Munkahely2>/<Érkezés>/` (autó az alapértelmezett, a lista tetején a leggyorsabb út, a "km" értéke az egész útra vonatkozik). Az első betöltéskor süti-elfogadó oldal jön: a "Az összes elutasítása" gombot kell választani.

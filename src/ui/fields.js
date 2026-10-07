@@ -32,7 +32,8 @@ export function fieldsHTML() {
   const typeOptions = groupedTypes().map((g) =>
     `<optgroup label="${esc(g.name)}">${g.types.map((t) => `<option value="${esc(t.code)}" ${d.typeCode === t.code ? "selected" : ""}>${esc(t.label)}</option>`).join("")}</optgroup>`).join("");
   const showWork = !travel && (!type || !whole);
-  let h = `<section class="card fields"><div class="row2">`;
+  const locked = !!(ctx.S.pomo && ctx.S.pomo.session && ctx.S.pomo.phase !== "idle");   // futó Pomodoro-munkamenet alatt a mezők zároltak
+  let h = `<section class="card fields"><fieldset class="fieldlock" ${locked ? "disabled" : ""}>${locked ? `<p class="small mut lockmsg">${icon("info", 0.9)} A Pomodoro-munkamenet alatt a mezők zároltak. Másik típushoz állítsd le a Pomodoro-t.</p>` : ""}<div class="row2">`;
   if (showWork) h += `<label class="f"><span>Munkahely</span>${placeField("workplace", d.workplace, "Munkahely", { suggest: "place" })}</label>`;
   h += `${typeField(d, type, typeOptions)}</div>`;
   if (travel) {
@@ -57,7 +58,7 @@ export function fieldsHTML() {
   }
   const label = !type ? "Tevékenység (nem kötelező)" : whole ? "Megjegyzés (nem kötelező)" : travel ? "Tevékenység (kötelező, a Költségelszámoláshoz)" : "Tevékenység (nem kötelező)";
   const ph = whole ? "Megjegyzés" : travel ? "Mi volt az út célja?" : "Mit csináltál? (nem kötelező)";
-  h += `<label class="f"><span>${label}</span><input type="text" data-ns="draft" data-field="activity" ${ctx.S.settings.suggestions ? 'data-suggest="activity"' : ""} value="${esc(d.activity)}" placeholder="${ph}" autocomplete="off"></label></section>`;
+  h += `<label class="f"><span>${label}</span><input type="text" data-ns="draft" data-field="activity" ${ctx.S.settings.suggestions ? 'data-suggest="activity"' : ""} value="${esc(d.activity)}" placeholder="${ph}" autocomplete="off"></label></fieldset></section>`;
   return h;
 }
 

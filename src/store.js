@@ -118,6 +118,8 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
   state.draft.startKm = String(state.draft.startKm ?? ""); state.draft.endKm = String(state.draft.endKm ?? "");
   configureTypes({ custom: state.settings.customCategories, hidden: state.settings.hiddenTypes, colors: state.settings.categoryColors });
 
+  let lastPomoTickMs = null;
+  const SLEEP_GAP_MS = 120000, HEARTBEAT_MS = 10000;
   const kmCtx = (day) => ({ entries: state.entries, day: day || todayYMD() });
   const fieldsComplete = (day) => !missingHint(state.draft, kmCtx(day));
   /** Az induló km az utolsó rögzített érkező km-mel töltődik elő (ha a mező üres). */
@@ -433,34 +435,71 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     discardTimer() { state.timer = null; write(KEYS.timer, null); api.resetDraft(); },
 
     // ---------- Pomodoro ----------
+    /** A munkamenet bejegyzéseinek felvétele; visszatér az összegzéssel {typeLabel, durationSeconds, entries} (nincs bejegyzés: null). */
+    _finishSession(session, endMs) {
+      const entries = P.sessionEntries(session.template, session.start, endMs);
+      for (const e of entries) api.addEntry(e);
+      return entries.length ? { ...entries[0], durationSeconds: entries.reduce((n, e) => n + e.durationSeconds, 0), entries } : null;
+    },
     startPomo(nowMs = Date.now()) {
       const type = draftType(state.draft);
       if (state.timer || P.isActive(state.pomo) || !type || isWholeDay(type) || missingHint(state.draft, kmCtx())) return false;
-      state.pomo = P.begin(state.pomo, "work", nowMs, state.settings.pomo);
+      // a mezők a munkamenet elején rögzülnek: ekkor készül el a bejegyzés-sablon, a lezáráskor csak az idő mezői íródnak bele
+      state.pomo = P.start(state.pomo, nowMs, state.settings.pomo, timedEntry(state.draft, nowMs, nowMs, "pomodoro"));
+      lastPomoTickMs = nowMs;
       return write(KEYS.pomo, state.pomo);
     },
-    stopPomo(nowMs = Date.now()) {
-      const r = P.stop(state.pomo, nowMs, fieldsComplete());
+    /** Az `r` (P.stop/discard/skipBreak/tick) eredményének érvényesítése: állapot, a munkamenet bejegyzései, régi módban az egyedi pomo. */
+    _apply(r, before) {
       state.pomo = r.state;
-      let entry = null;
-      if (r.entry) { entry = timedEntry(state.draft, r.entry.start, r.entry.end, "pomodoro"); api.addEntry(entry); }
-      api.resetDraft();
+      let saved = null;
+      if (r.endSession != null && before.session) saved = api._finishSession(before.session, r.endSession);
+      else if (r.entry) { const e = timedEntry(state.draft, r.entry.start, r.entry.end, "pomodoro"); api.addEntry(e); saved = { ...e, entries: [e] }; }
       write(KEYS.pomo, state.pomo);
-      return entry;
+      return saved;
     },
-    discardPomo() { state.pomo = { ...state.pomo, phase: "idle" }; write(KEYS.pomo, state.pomo); api.resetDraft(); },
-    skipPomoBreak(nowMs = Date.now()) { state.pomo = P.skipBreak(state.pomo, state.settings.pomo, nowMs); write(KEYS.pomo, state.pomo); },
-    resetPomoCounter() { state.pomo = { ...state.pomo, done: 0 }; write(KEYS.pomo, state.pomo); },
-    /** Másodpercenkénti léptetés: a szakaszváltás és a mentés. Visszatér a jelzéssel (hang, értesítés), ha volt. */
-    tickPomo(nowMs = Date.now()) {
+    /** Leállítás: a munkamenet (régi módban a félbehagyott pomo) eltelt ideje bekerül (30 másodperc alatt nem); az űrlap kiürül. */
+    stopPomo(nowMs = Date.now()) {
+      const before = state.pomo, saved = api._apply(P.stop(before, nowMs, fieldsComplete()), before);
+      api.resetDraft();
+      return saved;
+    },
+    /** A gép altatása: a munkamenet az altatás pillanatával lezárul és rögzül; az űrlap mezői megmaradnak, új pomo indítható. */
+    sleepPomo(atMs) {
       if (!P.isActive(state.pomo)) return null;
-      const r = P.tick(state.pomo, nowMs, state.settings.pomo, fieldsComplete());
-      if (r.state === state.pomo) return null;
-      state.pomo = r.state;
-      let entry = null;
-      if (r.entry) { entry = timedEntry(state.draft, r.entry.start, r.entry.end, "pomodoro"); api.addEntry(entry); }
-      write(KEYS.pomo, state.pomo);
-      return { notify: r.notify || null, entry };
+      const before = state.pomo;
+      return api._apply(P.stop(before, atMs, fieldsComplete()), before);
+    },
+    /** Elvetés (pomo közben): a futó pomo nem kerül be, a munkamenet korábbi része igen. */
+    discardPomo() {
+      const before = state.pomo, saved = api._apply(P.discard(before), before);
+      api.resetDraft();
+      return saved;
+    },
+    skipPomoBreak(nowMs = Date.now()) { const before = state.pomo; return api._apply(P.skipBreak(before, state.settings.pomo, nowMs), before); },
+    resetPomoCounter() { state.pomo = { ...state.pomo, done: 0 }; write(KEYS.pomo, state.pomo); },
+    /**
+     * Másodpercenkénti léptetés: a szakaszváltás, az életjel (kb. 10 másodpercenként) és az időugrás-észlelés. Az altatás a böngészőben nem érzékelhető
+     * közvetlenül: ha két ütem között (falióra szerint) 120 másodpercnél nagyobb az ugrás, a munkamenet a legutóbbi ütemnél ér véget.
+     * Visszatér a jelzéssel (hang, értesítés, bejegyzés, altatás), ha volt.
+     */
+    tickPomo(nowMs = Date.now()) {
+      if (!P.isActive(state.pomo)) { lastPomoTickMs = null; return null; }
+      const last = lastPomoTickMs;
+      lastPomoTickMs = nowMs;
+      if (last != null && nowMs - last > SLEEP_GAP_MS) {
+        lastPomoTickMs = null;
+        return { notify: null, entry: api.sleepPomo(last), slept: true };
+      }
+      const before = state.pomo;
+      const r = P.tick(before, nowMs, state.settings.pomo, fieldsComplete());
+      if (r.state !== before) {
+        const entry = api._apply(r, before);
+        if (state.pomo.session) { state.pomo = P.alive(state.pomo, nowMs); write(KEYS.pomo, state.pomo); }
+        return { notify: r.notify || null, entry };
+      }
+      if (before.session && nowMs - before.session.lastAlive >= HEARTBEAT_MS) { state.pomo = P.alive(before, nowMs); write(KEYS.pomo, state.pomo); }
+      return null;
     },
 
     // ---------- Adatmappa ----------
@@ -532,5 +571,10 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       return { ok: true };
     },
   };
+  // Induláskor: ha van mentett munkamenet (a fül vagy a böngésző bezárása, összeomlás után), a legutóbbi életjelig rögzül, majd a mentés törlődik.
+  {
+    const r = P.recover(state.pomo, Date.now());
+    if (r.recover) { state.pomo = r.state; api._finishSession(r.recover.session, r.recover.endMs); write(KEYS.pomo, state.pomo); }
+  }
   return api;
 }

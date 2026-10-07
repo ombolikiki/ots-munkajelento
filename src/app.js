@@ -288,6 +288,7 @@ function onTick() {
   const now = Date.now();
   const r = store.tickPomo(now);
   if (r) {
+    if (r.slept) ctx.say("A gép elaludt: a Pomodoro-munkamenet az altatás előtti ponton lezárult és rögzült. Új pomo indítható.", false, 9000);
     if (r.notify) {
       const snd = S.settings[r.notify.sound === "pomoEnd" ? "soundPomoEnd" : "soundBreakEnd"];
       if (snd && snd !== NO_SOUND) playSound(snd);
