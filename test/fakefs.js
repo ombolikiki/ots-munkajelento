@@ -21,6 +21,7 @@ export function fakeDir(name = "OTS") {
         },
       };
     },
+    async removeEntry(n) { if (!files.has(n)) { const e = new Error("nincs"); e.name = "NotFoundError"; throw e; } files.delete(n); },
     text: (n) => (files.has(n) ? new TextDecoder().decode(files.get(n).bytes) : null),
     put(n, text) { files.set(n, { bytes: typeof text === "string" ? new TextEncoder().encode(text) : text, mtime: ++clock }); },
   };

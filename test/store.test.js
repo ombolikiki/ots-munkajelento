@@ -36,14 +36,14 @@ test("időmérő: indítás csak kitöltött űrlappal, leállítás menti és k
   const st = memory(); const s = createStore(st);
   assert.equal(s.startTimer(1000), false);                               // nincs típus
   fill(s, { typeCode: "HOLIDAY" }); assert.equal(s.startTimer(1000), false);   // egész napos
-  fill(s, { typeCode: "MEETING", workplace: "Győr", activity: "", roundTrip: true });
+  fill(s, { typeCode: "MEETING", workplace: "Győr", activity: "", roundTrip: true });   // rögzítés után újra kikapcsolt
   const start = new Date(2026, 9, 5, 9, 0, 0).getTime();
   assert.equal(s.startTimer(start), true);
   assert.equal(s.startTimer(start + 5), false);                           // már fut
   assert.equal(s.startPomo(start + 5), false);                            // az időmérő alatt a Pomodoro nem indul
   const e = s.stopTimer(start + 3600 * 1000);
   assert.equal(e.durationSeconds, 3600); assert.equal(e.date, "2026-10-05");
-  assert.equal(s.state.timer, null); assert.equal(s.state.draft.typeCode, ""); assert.equal(s.state.draft.roundTrip, true);
+  assert.equal(s.state.timer, null); assert.equal(s.state.draft.typeCode, ""); assert.equal(s.state.draft.roundTrip, false);
   assert.equal(s.state.entries.length, 1); assert.deepEqual(s.state.places, ["Győr"]);
 });
 
@@ -58,7 +58,7 @@ test("típusváltás: Utazásnál a székhely az alapérték, mennyiség nélkü
   const s = createStore(memory());
   s.saveSettings({ home: "Pécs" });
   fill(s, { quantity: 5 }); s.setDraftType("TRAVEL");
-  assert.equal(s.state.draft.departure, "Pécs"); assert.equal(s.state.draft.roundTrip, true); assert.equal(s.state.draft.workplaceIsDeparture, false); assert.equal(s.state.draft.quantity, 1);
+  assert.equal(s.state.draft.departure, "Pécs"); assert.equal(s.state.draft.roundTrip, false); assert.equal(s.state.draft.workplaceIsDeparture, false); assert.equal(s.state.draft.quantity, 1);
   fill(s, { departure: "Mór" }); s.setDraftType("MEETING"); s.setDraftType("TRAVEL");
   assert.equal(s.state.draft.departure, "Mór");   // a már kitöltött nem íródik felül
   s.setDraftType("VISITING"); fill(s, { quantity: 4 }); s.setDraftType("VISITING"); assert.equal(s.state.draft.quantity, 4);
@@ -235,7 +235,7 @@ test("a régi (Indulás / Munkahely(ek) / Érkezés) piszkozat átkerül az új 
   const st = memory();
   st.setItem("ots.draft", JSON.stringify({ typeCode: "TRAVEL", workplace: "Tata, Mór", departure: "Győr", arrival: "Győr", roundTrip: false, activity: "x" }));
   const d = createStore(st).state.draft;
-  assert.equal(d.destination, "Tata, Mór"); assert.equal(d.departure, "Győr"); assert.equal(d.roundTrip, true); assert.equal("arrival" in d, false);
+  assert.equal(d.destination, "Tata, Mór"); assert.equal(d.departure, "Győr"); assert.equal(d.roundTrip, false); assert.equal("arrival" in d, false);
 });
 
 test("Szabadnap egy kattintással: csak üres, múltbeli napra, kétszer nem", () => {
@@ -279,4 +279,50 @@ test("km: előtöltés az utolsó érkező km-mel, rögzítés után az érkező
   assert.equal(s.state.draft.startKm, "5000");   // a kézzel írt érték marad
   assert.match(s.updateKm("nincs", "1", "2"), /nem található/);
   assert.deepEqual(s.monthKm("2026-10-20"), { km: 110, incomplete: 0 });
+});
+
+test("Ünnepnap egy kattintással: csak a magyar munkaszüneti napra, kétszer nem, jövőre nem; munkabejegyzés mellett is", () => {
+  const s = createStore(memory());
+  const today = "2026-10-27";
+  const r = s.markFeastDay("2026-10-23", today);
+  assert.ok(r.ok); const e = s.state.entries[0];
+  assert.ok(e.type === "FEAST_DAY" && e.unit === "egesz_nap" && e.source === "manual" && e.durationSeconds === 0 && e.date === "2026-10-23");
+  assert.equal(e.activity, "Október 23. (nemzeti ünnep)"); assert.equal(e.workplace, "ÜNNEPNAP - OKTÓBER 23. (NEMZETI ÜNNEP)");
+  assert.equal(s.markFeastDay("2026-10-23", today).ok, false); assert.equal(s.state.entries.length, 1);   // kétszer nem
+  assert.match(s.markFeastDay("2026-10-22", today).error, /nem munkaszüneti nap/);
+  assert.match(s.markFeastDay("2026-12-25", today).error, /Jövőbeli/);
+  assert.equal(s.markFeastDay("hibás", today).ok, false);
+  s.addEntry({ id: "w", date: "2026-11-01", type: "MEETING", typeLabel: "Értekezlet", unit: "ora", start: null, end: null, durationSeconds: 3600, quantity: null, workplace: "Győr", activity: "", source: "manual", departure: null, arrival: null });
+  assert.equal(s.markFeastDay("2026-11-01", "2026-11-02").ok, true);   // munkabejegyzéses napon is működik
+  assert.equal(s.state.entries.filter((x) => x.date === "2026-11-01").length, 2);
+});
+
+test("fordított út: a napon belüli előző Utazás fordítottja töltődik elő, csak ha a felhasználó nem szerkesztette; oda-vissza útnál nincs fordítás", () => {
+  const s = createStore(memory());
+  s.saveSettings({ home: "Győr" });
+  const trip = (id, dep, work, arr, o = {}) => ({ id, date: "2026-10-05", type: "TRAVEL", typeLabel: "Utazás", unit: "ora", start: "08:00:00", end: "09:00:00", durationSeconds: 3600, quantity: null, workplace: work, activity: "Kiszállás", source: "manual", departure: dep, arrival: arr, ...o });
+  s.addEntry(trip("11111111-1111-4111-8111-111111111111", "Győr", "Tata, Mór", "Mór"));   // egyirányú: Győr - Tata - Mór
+  s.setDraftType("TRAVEL");
+  assert.equal(s.prefillReverseTrip("2026-10-05"), true);
+  assert.deepEqual([s.state.draft.departure, s.state.draft.destination, s.state.draft.activity], ["Mór", "Tata, Győr", "Kiszállás"]);   // Mór - Tata - Győr
+  assert.equal(s.prefillReverseTrip("2026-10-05"), false);   // változatlanul idempotens
+  s.prefillReverseTrip("2026-10-06");   // másik nap: nincs út, visszaáll az alapra (de csak az automatikus kitöltést)
+  assert.deepEqual([s.state.draft.departure, s.state.draft.destination, s.state.draft.activity], ["Győr", "", ""]);
+  s.prefillReverseTrip("2026-10-05");
+  fill(s, { destination: "Pápa" });   // a felhasználó átírta: nem írja felül
+  assert.equal(s.prefillReverseTrip("2026-10-05"), false); s.prefillReverseTrip("2026-10-06"); assert.equal(s.state.draft.destination, "Pápa");
+  fill(s, { departure: "Győr", destination: "", activity: "Saját cél" });
+  s.prefillReverseTrip("2026-10-05");
+  assert.equal(s.state.draft.activity, "Saját cél");   // a megadott Tevékenységet nem írja felül
+  // oda-vissza előző út: nincs fordítás
+  const s2 = createStore(memory()); s2.saveSettings({ home: "Győr" });
+  s2.addEntry(trip("22222222-2222-4222-8222-222222222222", "Győr", "Tata", "Győr"));
+  s2.setDraftType("TRAVEL");
+  assert.equal(s2.prefillReverseTrip("2026-10-05"), false); assert.deepEqual([s2.state.draft.departure, s2.state.draft.destination], ["Győr", ""]);
+  // az utolsó (időben legkésőbbi) Utazás számít; a rögzítés után újra számol
+  const s3 = createStore(memory()); s3.saveSettings({ home: "Győr" });
+  s3.addEntry(trip("33333333-3333-4333-8333-333333333333", "Győr", "Tata", "Tata"));
+  s3.addEntry(trip("44444444-4444-4444-8444-444444444444", "Tata", "Mór", "Mór", { start: "10:00:00", end: "11:00:00" }));
+  s3.setDraftType("TRAVEL"); s3.prefillReverseTrip("2026-10-05");
+  assert.deepEqual([s3.state.draft.departure, s3.state.draft.destination], ["Mór", "Tata"]);
 });

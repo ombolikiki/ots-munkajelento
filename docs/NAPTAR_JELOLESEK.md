@@ -41,6 +41,8 @@ Típus: Mit csináltál
 | Szabadság | `Szabadság` | egész nap |
 | Szabadnap | `Szabadnap` | egész nap |
 | Munkaszüneti nap | `Munkaszüneti nap`, `Munkaszüneti` | egész nap |
+| Ünnepnap | `Ünnepnap` | egész nap |
+| Pihenőnap | `Pihenőnap` | egész nap |
 
 A rövid alakok kényelmesek telefonon. A felismerés a cím **elején** történik: a leghosszabb egyező névvel, ezért a `Missziós látogatás` nem keveredik a `Látogatás`-sal.
 
@@ -84,7 +86,7 @@ Utazás: Győr ⇄ Tata, Mór | Kiszállás a környékre
 
 ## 6. Egész napos események
 
-Egész napos eseményként (a naptárban „egész nap” jelölővel) a cím `Szabadság`, `Szabadnap` vagy `Munkaszüneti nap`. Többnapos egész napos esemény **naponta egy bejegyzést** ad (a lezajlott napokra). Más típus egész naposként nem értelmezett.
+Egész napos eseményként (a naptárban „egész nap” jelölővel) a cím `Szabadság`, `Szabadnap`, `Munkaszüneti nap`, `Ünnepnap` vagy `Pihenőnap`. Többnapos egész napos esemény **naponta egy bejegyzést** ad (a lezajlott napokra). Más típus egész naposként nem értelmezett.
 
 ## 7. Példák
 
@@ -117,7 +119,7 @@ Egész napos eseményként (a naptárban „egész nap” jelölővel) a cím `S
 4. **Utazás:** az útvonal elválasztói `→`, `->`; oda-vissza jelölés `⇄`, `<->`, `oda-vissza`. Az Indulás az első elem; ha `→` van, az Érkezés az utolsó, a közbülsők a Munkahely(ek). Ha `⇄`: az Indulás az első elem, a többi Munkahely, az Érkezés = Indulás. A Tevékenység a `|` utáni szöveg, különben a Leírás mező első sora; Utazásnál üresen a bejegyzés „Hiányos”. Ha az útvonalban csak egy nyíl van (`A → B`), az Érkezés B, a Munkahely hiányzik, ezért a bejegyzés „Hiányos” (nem tippelünk). Útvonal nélkül (`Utazás: cél`) az Indulás és az Érkezés a székhely; ha nincs székhely megadva, „Hiányos”. A `|` előtt útvonal nélkül álló szöveg a Munkahely(ek) listája.
 5. **Munkahely:** `@Település`, különben a Helyszín mező (a „Pontos cím megadása” és a 11. pont szerint), különben „Hiányos” (kivéve egész napos típust).
 6. **Idő:** időzített eseménynél a helyi idő szerinti kezdés/vég; az **éjfélen átnyúló esemény két bejegyzésre bomlik**: az első a kezdés napján 24:00-ig, a második a következő napon 0:00-tól tart; mindkét nap saját óraszámot kap (a napi 8 órás jelzésben is így számít). **Kivétel:** az alkalom és fő típusoknál (Istentisztelet, Látogatás, Evangelizáció, Bibliaóra) nem bomlik: az időtartam ott csak tájékoztató, és a mennyiség nem duplázódhat; a bejegyzés a kezdés napjára kerül. Az időtartam = vég − kezdés; alkalom/fő típusnál a mennyiség számít (a CSV-ben az idők is megmaradnak).
-7. **Egész napos:** csak Szabadság, Szabadnap, Munkaszüneti nap; többnaposnál naponta egy bejegyzés, kizárólag a mai napnál korábbi napokra.
+7. **Egész napos:** csak Szabadság, Szabadnap, Munkaszüneti nap, Ünnepnap, Pihenőnap; többnaposnál naponta egy bejegyzés, kizárólag a mai napnál korábbi napokra.
 8. **Kihagyás:** jövőbeli (vagy ma még nem lejárt) esemény, visszautasított, törölt; az ismétlődő eseményt példányonként kezeljük.
 9. **Azonosító:** az átvett bejegyzés `Forrás` mezője `calendar` (a Mac-app így tárolja; ez az érték a Mac-app saját Naptár nézetében húzással felvett bejegyzésnél is előfordul, ezért a naptárból átvett bejegyzést nem a `Forrás`, hanem a nem üres `Naptár azonosító` jelzi), és a `Naptár azonosító` CSV-oszlop tartalmazza az azonosítót: `<esemény azonosító>#YYYY-MM-DD`, vagyis minden nap külön azonosítót kap (egynapos eseménynél is). Ismétlődő vagy kivételes (leválasztott) példánynál az esemény azonosítója után `|` és a példány eredeti kezdete (UNIX másodperc) áll: `<azonosító>|<másodperc>#YYYY-MM-DD`. Az azonosító alapja a `#YYYY-MM-DD` utótag (pontosan 10 karakter, érvényes dátum) levágásával adódik. Ugyanazt az eseményt nem vesszük át újra.
 10. **Változás utólag (eldöntve):** a naptár a mérvadó. A módosított esemény bejegyzése frissül (akkor is, ha az átvett bejegyzést kézzel szerkesztették; ezt az alkalmazás jelzi), a naptárban törölt eseményhez tartozó, naptárból átvett bejegyzés törlődik. Kézzel felvitt bejegyzést a szinkron nem érint. Törlés/felülírás előtt másolat készül az adatfájlról. **Védelem:** a szinkron nem töröl magától, ha a törlések száma nagyobb, mint 5 és az ablakbeli naptáras bejegyzések fele, vagy ha a naptár üresnek látszik: ilyenkor megerősítést kér. A naptár kijelölésének megszüntetése nem töröl (csak az, ha az esemény egyik naptárban sincs meg). Az ablaknál (alapból 60 nap) régebbi bejegyzéshez a szinkron nem nyúl; a lemondott és visszautasított esemény bejegyzése törlődik.

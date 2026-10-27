@@ -7,11 +7,11 @@ import { spawnSync } from "node:child_process";
 import * as S from "../src/skill.js";
 
 const bundle = JSON.parse(readFileSync(new URL("../skill/bundle.json", import.meta.url), "utf8"));
-const sel = (o = {}) => ({ userName: "Kovács János", home: "Székesfehérvár", congregations: "Mór, Bicske", site: "det", dataPath: "C:\\Users\\Kovács János\\Documents\\OTS Munkajelentő Tracker", tasks: ["havi", "koltseg", "nevsor", "hittan", "latogatottsag"], ...o });
+const sel = (o = {}) => ({ userName: "Kovács János", home: "Székesfehérvár", congregations: "Mór, Bicske", site: "det", dataPath: "C:\\Users\\Kovács János\\Documents\\OTS Munkajelentő Tracker", tasks: ["havi", "koltseg", "nevsor", "hittan", "latogatottsag", "szabad"], ...o });
 
 test("a csomagolt sablon megvan, és személyes adat nélküli", () => {
   assert.ok(bundle.files["SKILL.md"].includes("name: ots-adminisztracio"));
-  assert.equal(bundle.tasks.length, 5);
+  assert.equal(bundle.tasks.length, 6);
   for (const t of bundle.tasks) for (const f of [...t.files, ...t.shared]) assert.ok(bundle.files[f], f);
   const all = Object.values(bundle.files).join("\n");
   for (const bad of ["Ömböli", "Krisztián", "Győr", "Tatabánya", "Toggl", "detkapu-adminisztracio"]) assert.equal(all.includes(bad), false, bad);
@@ -30,7 +30,7 @@ test("sablon kitöltése: feladat-jelölők, közös szakasz, feltételes rész,
 });
 
 test("mind az öt feladattal és a feladatok kombinációival hibátlan a kitöltés; nincs megmaradt jelölő, Mac-útvonal vagy személyes adat", async () => {
-  const combos = [sel().tasks, ["havi"], ["koltseg"], ["nevsor", "hittan"], ["latogatottsag", "havi"], ["hittan"]];
+  const combos = [sel().tasks, ["havi"], ["koltseg"], ["nevsor", "hittan"], ["latogatottsag", "havi"], ["hittan"], ["szabad"]];
   for (const tasks of combos) for (const flavor of ["claude", "generic"]) {
     const files = await S.buildFiles(bundle, sel({ tasks }), flavor);
     const text = files.map((f) => f.text).join("\n");
@@ -39,7 +39,7 @@ test("mind az öt feladattal és a feladatok kombinációival hibátlan a kitöl
     assert.ok(files.some((f) => f.path === "SKILL.md")); assert.ok(files.some((f) => f.path === S.MARKER_NAME));
     assert.ok(text.includes("https://ots.detkapu.hu/"));
     assert.equal(text.includes("mcp__Claude_Browser__"), flavor === "claude");
-    const uses = tasks.some((t) => ["havi", "koltseg", "latogatottsag"].includes(t));
+    const uses = tasks.some((t) => ["havi", "koltseg", "latogatottsag", "szabad"].includes(t));
     assert.equal(files.some((f) => f.path === "references/tracker-adatforras.md"), uses);
     if (uses) assert.ok(text.includes("C:\\Users\\Kovács János\\Documents\\OTS Munkajelentő Tracker\\beallitasok.json"));
     const present = files.filter((f) => f.path.startsWith("references/")).map((f) => f.path).sort();
@@ -120,4 +120,18 @@ test("kiírás kiválasztott mappába: meglévő telepítésről előbb másolat
   assert.deepEqual(r2, { backedUp: true, replaced: true });
   assert.equal(backups.dirs.size, 1);
   const [name] = [...backups.dirs.keys()]; assert.match(name, /^ots-adminisztracio-\d+$/); assert.ok(backups.dirs.get(name).files.has("SKILL.md")); assert.ok(backups.dirs.get(name).dirs.get("references").files.size > 0);
+});
+
+test("szabad szöveges feladat: a Python-kód a felhasználó adatmappáját használja (Windows és Mac), nincs Mac-útvonal; az OTS-t nem érinti", async () => {
+  const win = (await S.buildFiles(bundle, sel({ tasks: ["szabad"] }), "generic")).find((f) => f.path === "references/szabad-szoveg.md").text;
+  assert.ok(win.includes('r"C:\\Users\\Kovács János\\Documents\\OTS Munkajelentő Tracker\\beallitasok.json"'));
+  assert.ok(win.includes('r"C:\\Users\\Kovács János\\Documents\\OTS Munkajelentő Tracker\\bejegyzesek.csv"'));
+  assert.equal(/Library/.test(win), false); assert.ok(win.includes("bejegyzesek-import.csv")); assert.ok(win.includes("Forrás"));
+  const mac = (await S.buildFiles(bundle, sel({ tasks: ["szabad"], dataPath: "/Users/anna/OTS" }), "claude")).find((f) => f.path === "references/szabad-szoveg.md").text;
+  assert.ok(mac.includes('r"/Users/anna/OTS/beallitasok.json"'));
+  const skill = (await S.buildFiles(bundle, sel({ tasks: ["szabad"] }), "generic")).find((f) => f.path === "SKILL.md").text;
+  assert.ok(skill.includes("szabad szöveg") || skill.includes("szabad-szoveg")); assert.ok(skill.includes("az OTS-t **nem érinti**"));
+  assert.equal(skill.includes("havi-munkajelento.md"), false);   // csak a kijelölt feladat sora marad
+  assert.equal(S.detailsError({ userName: "A", dataPath: "" }, bundle.tasks, ["szabad"]) !== null, true);   // az adatmappa kell hozzá
+  assert.equal(S.detailsError({ userName: "A", dataPath: "C:\\x" }, bundle.tasks, ["szabad"]), null);
 });

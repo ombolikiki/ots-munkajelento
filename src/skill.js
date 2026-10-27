@@ -36,15 +36,16 @@ export const TASK_SUMMARY = {
   nevsor: "Negyedéves névsor lezárása gyülekezetenként.",
   hittan: "Félévente a hitoktatás lezárása gyülekezetenként.",
   latogatottsag: "Létszámjelentő kitöltése a rögzített létszámokból.",
+  szabad: "Bejegyzések felvitele szabad szövegből („Ma 9–10 között adminisztráltam”): az asszisztens kérdez, te jóváhagyod az alkalmazásban.",
 };
 
 export const CLAUDE_BROWSER = "Böngészőként a beépített Claude böngészőpanelt használd (`mcp__Claude_Browser__*`).";
 export const GENERIC_BROWSER = "Böngészőként a környezetedben elérhető böngésző- vagy számítógép-vezérlő eszközt használd, a felhasználó bejelentkezett munkamenetével. Ha nincs ilyen eszköz, szólj a felhasználónak, és ne dolgozz a felület nélkül.";
 
-export const TASK_ORDER_DEFAULT = ["havi", "koltseg", "nevsor", "hittan", "latogatottsag"];
+export const TASK_ORDER_DEFAULT = ["havi", "koltseg", "nevsor", "hittan", "latogatottsag", "szabad"];
 
 /** Az adatforrás-leírást használó feladatok. */
-const TRACKER_TASKS = ["havi", "koltseg", "latogatottsag"];
+export const TRACKER_TASKS = ["havi", "koltseg", "latogatottsag", "szabad"];
 
 // ---------- Sablon kitöltése ----------
 
@@ -111,6 +112,17 @@ export function adaptTracker(text, dataPath) {
   return t;
 }
 
+/** A szabad szöveges feladat Python-kódjának igazítása a webalkalmazáshoz: a Mac-útvonalak helyett a felhasználó adatmappája (Python nyers sztringként). */
+export function adaptFreeText(text, dataPath) {
+  const dir = String(dataPath ?? "").trim();
+  const mac = "~/Library/Application Support/OTS Munkajelentő Tracker/";
+  let t = String(text);
+  const lit = (name) => (dir ? `r"${joinPath(dir, name)}"` : `r"<az adatmappa>/${name}"`);
+  t = t.split(`os.path.expanduser("${mac}beallitasok.json")`).join(lit("beallitasok.json"));
+  t = t.split(`os.path.expanduser("${mac}bejegyzesek.csv")`).join(lit("bejegyzesek.csv"));
+  return adaptTracker(t, dataPath);
+}
+
 export function effectiveValues({ userName, home, congregations, site }, needs) {
   const s = SITES[site] || SITES.det;
   return {
@@ -169,6 +181,7 @@ export async function buildFiles(bundle, sel, flavor, { version = "web", now = n
     if (!include.has(path)) continue;
     let text = render(bundle.files[path], { tasks: sel.tasks, values, browser });
     if (path === "references/tracker-adatforras.md") text = adaptTracker(text, sel.dataPath);
+    if (path === "references/szabad-szoveg.md") text = adaptFreeText(text, sel.dataPath);
     if (PLACEHOLDER_LEFT.test(text)) throw new Error(`Kitöltetlen helyőrző vagy jelölő maradt a(z) ${path} fájlban.`);
     files.push({ path, text });
   }

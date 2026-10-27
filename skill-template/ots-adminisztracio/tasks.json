@@ -58,6 +58,17 @@
       "needs": [
         "congregations"
       ]
+    },
+    {
+      "id": "szabad",
+      "name": "Bejegyzések felvitele szabad szövegből",
+      "files": [
+        "references/szabad-szoveg.md"
+      ],
+      "shared": [
+        "references/tracker-adatforras.md"
+      ],
+      "needs": []
     }
   ]
 }

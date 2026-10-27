@@ -123,6 +123,12 @@ export function createFolder({ handleStore, picker, supported = true } = {}) {
       return (await fh.getFile()).lastModified;
     },
 
+    /** Fájl törlése (ha nincs ilyen, nem csinál semmit). */
+    async remove(name) {
+      if (!handle) return false;
+      try { await handle.removeEntry(name); return true; } catch (e) { if (errName(e) === "NotFoundError") return false; throw e; }
+    },
+
     /** Másolat készítése egy meglévő fájlról (ha az nincs, nem csinál semmit). */
     async copy(name, newName) {
       const cur = await f.read(name);

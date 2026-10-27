@@ -1,11 +1,12 @@
 // Bejegyzések létrehozása és az űrlap szabályai (tiszta függvények, tesztelhetők).
-import { UNIT, isTravel, isWholeDay, hasQuantity, lookupByCode } from "./types.js";
+import { UNIT, isTravel, isWholeDay, hasQuantity, lookupByCode, wholeDayWorkplace } from "./types.js";
+import { routeDetail } from "./manual.js";
 import { uuid, number } from "./csv.js";
 import { parsePlace, parsePlaces } from "./calendarParser.js";
 import { toYMD, hhmmss, todayYMD, parseTime, parseYMD, pad } from "./dates.js";
 
 export const emptyDraft = () => ({
-  typeCode: "", workplace: "", activity: "", departure: "", destination: "", roundTrip: true, workplaceIsDeparture: false, startKm: "", endKm: "", quantity: 1,
+  typeCode: "", workplace: "", activity: "", departure: "", destination: "", roundTrip: false, workplaceIsDeparture: false, startKm: "", endKm: "", quantity: 1,
 });
 
 export const draftType = (d) => lookupByCode(d.typeCode);
@@ -22,7 +23,7 @@ export function applyType(d, code, home = "") {
   return next;
 }
 
-/** Az űrlap kiürítése rögzítés után (az Oda-vissza jelölő újra bejelölt, a Munkahely a Cél, mint a natív appban). */
+/** Az űrlap kiürítése rögzítés után (az Oda-vissza jelölő újra kikapcsolt, a Munkahely a Cél, mint a natív appban). */
 export const clearedDraft = (_d, startKm = "") => ({ ...emptyDraft(), startKm });
 
 /** Munkahely(ek) szövege -> tiszta lista. */
@@ -38,7 +39,7 @@ export function migrateDraft(d, stored) {
   delete out.arrival;
   if (stored.destination === undefined) {
     out.destination = stored.typeCode === "TRAVEL" ? String(stored.workplace ?? "") : "";
-    out.roundTrip = true;
+    out.roundTrip = false;
   }
   out.workplaceIsDeparture = !!out.workplaceIsDeparture;
   return out;
@@ -187,7 +188,7 @@ export function wholeDayEntry(d, day) {
   const type = draftType(d);
   const e = base(d, type, "manual");
   e.date = day;
-  e.workplace = type.shortLabel.toUpperCase();
+  e.workplace = wholeDayWorkplace(type, d.activity);
   return e;
 }
 
@@ -297,4 +298,12 @@ export function placeText(settlement, address) {
   const suffix = ", " + st;
   const street = address.endsWith(suffix) ? address.slice(0, -suffix.length) : address;
   return `${st}, ${street}`;
+}
+
+/** Az út fordítottja: Kiindulás = az útvonal utolsó pontja, Cél = a többi pont fordított sorrendben (a pontos címek velük együtt). Oda-vissza útnál (az útvonal ugyanoda tér vissza) nincs fordítás: null. */
+export function reverseTrip(e, home = "") {
+  const points = routeDetail(e, home);
+  if (points.length < 2 || points[0].name.trim().toLowerCase() === points[points.length - 1].name.trim().toLowerCase()) return null;
+  const rev = [...points].reverse();
+  return { departure: placeText(rev[0].name, rev[0].address), destination: rev.slice(1).map((p) => placeText(p.name, p.address)).join(", ") };
 }

@@ -12,7 +12,7 @@ export const PROBLEM_TEXT = {
   missingActivity: "Az Utazásnál a Tevékenység (az út célja) kötelező.",
   missingDeparture: "Nincs megadva az Indulás, és nincs székhely sem a Beállításokban.",
   multipleAddresses: "Több cím szerepel a Helyszínben; válaszd ki a munkahelyet.",
-  wholeDayNotAllowed: "Egész napos eseményként csak a Szabadság, a Szabadnap és a Munkaszüneti nap értelmezett.",
+  wholeDayNotAllowed: "Egész napos eseményként csak a Szabadság, a Szabadnap, a Munkaszüneti nap, az Ünnepnap és a Pihenőnap értelmezett.",
   noDuration: "Az esemény időtartama nulla vagy negatív.",
   tooLong: "Az esemény túl hosszú (több mint 31 nap).",
 };
@@ -26,7 +26,7 @@ const TYPE_NAMES = [
   ["Továbbképzés", "TRAINING"], ["Képzés", "TRAINING"], ["Tartott képzés", "HELD_TRAINING"], ["Tartott továbbképzés", "HELD_TRAINING"],
   ["Adminisztráció", "ADMINISTRATION"], ["Admin", "ADMINISTRATION"], ["Felkészülés", "PREPARING"], ["Felk", "PREPARING"],
   ["Utazás", "TRAVEL"], ["Utaz", "TRAVEL"], ["Szabadság", "HOLIDAY"], ["Szabadnap", "DAY_OFF"],
-  ["Munkaszüneti nap", "PUBLIC_HOLIDAY"], ["Munkaszüneti", "PUBLIC_HOLIDAY"],
+  ["Munkaszüneti nap", "PUBLIC_HOLIDAY"], ["Munkaszüneti", "PUBLIC_HOLIDAY"], ["Ünnepnap", "FEAST_DAY"], ["Pihenőnap", "REST_DAY"],
 ];
 
 const isLetterOrNumber = (c) => /[\p{L}\p{N}]/u.test(c);

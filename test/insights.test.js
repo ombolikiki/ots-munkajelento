@@ -44,7 +44,7 @@ test("mentési emlékeztető", () => {
 });
 
 import * as D from "../src/dates.js";
-const entryOn = (type, day, over = {}) => ({ type, date: day, unit: type === "DAY_OFF" ? "egesz_nap" : "ora", durationSeconds: 0, quantity: null, ...over });
+const entryOn = (type, day, over = {}) => ({ type, date: day, unit: ["DAY_OFF", "FEAST_DAY", "REST_DAY"].includes(type) ? "egesz_nap" : "ora", durationSeconds: 0, quantity: null, ...over });
 
 test("hétvége: üresen jelez, bármilyen bejegyzés elég, az egész napos kitöltött (2024–2035 minden negyedév)", () => {
   let n = 0;
@@ -84,4 +84,17 @@ test("havi korlát figyelmeztetés: szabadnap és munkaszüneti nap külön szá
   const mixed = [...oct, ...["2026-10-05", "2026-10-06"].map(pub)];
   assert.equal(I.monthLimitWarning(mixed, pub("2026-10-06")), null);   // külön számolva
   assert.equal(I.monthLimitWarning(oct, entryOn("MEETING", "2026-10-02")), null);
+});
+
+test("Ünnepnap és Pihenőnap: a napi 8 óra nem vonatkozik rá (munka mellett sem); a havi korlátba nem számít", () => {
+  const w = (d, h) => entryOn("MEETING", d, { durationSeconds: h * 3600 });
+  for (const type of ["FEAST_DAY", "REST_DAY"]) {
+    assert.equal(I.targetState("2026-10-05", [entryOn(type, "2026-10-05"), w("2026-10-05", 2)], "2026-10-14", 8), "exempt");
+    assert.equal(I.targetState("2026-10-05", [entryOn(type, "2026-10-05")], "2026-10-14", 8), "exempt");
+  }
+  assert.equal(I.targetState("2026-10-05", [w("2026-10-05", 2)], "2026-10-14", 8), "short");   // ünnepnap-bejegyzés nélkül normál munkanap
+  const feasts = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"].map((d) => entryOn("FEAST_DAY", d));
+  assert.equal(I.monthLimitWarning(feasts, feasts[6]), null);
+  const rests = feasts.map((e) => ({ ...e, type: "REST_DAY" }));
+  assert.equal(I.monthLimitWarning(rests, rests[6]), null);
 });

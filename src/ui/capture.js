@@ -7,6 +7,7 @@ import { ctx, ui } from "./ctx.js";
 import { esc, $, timeValue } from "./util.js";
 import { clampStart } from "../entries.js";
 import { monthLimitWarning } from "../insights.js";
+import { holidayName } from "../holidays.js";
 import { icon } from "./icons.js";
 import { fieldsHTML } from "./fields.js";
 import { askNotifications } from "./sound.js";
@@ -84,6 +85,10 @@ export function manualHTML() {
   const m = ui.manual, S = ctx.S, type = draftType(S.draft), whole = isWholeDay(type), needsTime = type && type.unit === UNIT.HOURS;
   const r = manualResult();
   let h = resolveBannerHTML() + fieldsHTML() + `<section class="card manual"><label class="f"><span>Nap</span><input type="date" data-ns="manual" data-field="day" value="${esc(ui.day)}" max="${todayYMD()}"></label>`;
+  const holiday = holidayName(ui.day);
+  if (holiday && ui.day <= todayYMD() && !S.entries.some((e) => e.date === ui.day && e.type === "FEAST_DAY")) {
+    h += `<button type="button" class="feastbtn" data-action="feastDay" data-day="${esc(ui.day)}" title="Ünnepnap bejegyzés erre a napra. Az OTS-be ÜNNEPNAP - &lt;NÉV&gt; kerül; ha dolgoztál, a munkabejegyzés mellé is felvehető, ilyenkor nem számít a napi óraszám.">${icon("sun", 0.95)} Ünnepnap: ${esc(holiday)}</button>`;
+  }
   if (needsTime) {
     h += `<div class="seg"><button type="button" data-action="mmode" data-mode="range" aria-pressed="${m.mode === "range"}">Időpont (tól–ig)</button>
       <button type="button" data-action="mmode" data-mode="duration" aria-pressed="${m.mode === "duration"}">Óraszám</button></div>`;

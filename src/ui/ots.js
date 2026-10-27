@@ -63,6 +63,8 @@ function workChips(day, rows) {
   const chips = [];
   if (r.holiday) chips.push({ text: "Szabadság", color: colorFor("HOLIDAY") });
   if (r.workplace === "SZABADNAP") chips.push({ text: "Szabadnap", color: colorFor("DAY_OFF") });
+  if (r.workplace.startsWith("ÜNNEPNAP")) chips.push({ text: "Ünnepnap", color: colorFor("FEAST_DAY") });
+  if (r.workplace.startsWith("PIHENŐNAP")) chips.push({ text: "Pihenőnap", color: colorFor("REST_DAY") });
   if (r.workplace === "MUNKASZÜNETI NAP") chips.push({ text: "Munkaszüneti nap", color: colorFor("PUBLIC_HOLIDAY") });
   for (const t of M.columns()) if (r.values[t.code] != null) chips.push({ text: `${t.shortLabel} ${r.values[t.code]} ${unitText(t)}`, color: colorFor(t.code) });
   if (!chips.length && r.workplace.startsWith("!!!")) chips.push({ text: "!!!", color: "var(--warn)" });

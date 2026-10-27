@@ -6,7 +6,7 @@ test.afterEach(() => T.configureTypes({}));
 
 test("saját kategóriák, elrejtés és keresés", () => {
   T.configureTypes({ custom: [{ code: "EGYEDI_ONKEPZES", label: "Önképzés", unit: "occasions" }, { code: "", label: "rossz" }, null], hidden: ["DAY_OFF"] });
-  assert.equal(T.allTypes().length, 14 + 1);
+  assert.equal(T.allTypes().length, 16 + 1);
   assert.equal(T.lookupByCode("egyedi_onkepzes").unit, T.UNIT.OCCASIONS);
   assert.equal(T.lookupByLabel("önképzés").code, "EGYEDI_ONKEPZES");
   assert.ok(T.isHidden("DAY_OFF")); assert.ok(T.lookupByCode("DAY_OFF"));   // elrejtve, de a régi bejegyzés típusa ismert marad

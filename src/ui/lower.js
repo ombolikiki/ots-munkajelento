@@ -6,6 +6,7 @@ import { isDueDay, pendingAttendance, reportsOn, emptyReport, clampCount, MAX_CO
 import { ctx, ui } from "./ctx.js";
 import { esc, entryAmount, entryWhen, entryDetail, hm } from "./util.js";
 import { kmDriven } from "../entries.js";
+import { holidayName } from "../holidays.js";
 import { icon } from "./icons.js";
 
 const entriesOn = (day) => ctx.S.entries.filter((e) => e.date === day);
@@ -122,8 +123,10 @@ export function missingHTML() {
     const lead = kind === "short" ? `<span class="dot stopc"></span>` : kind === "att" ? icon("people", 0.85) : "";
     const title = kind === "missing" ? "Kitöltetlen nap" : kind === "short" ? `Nincs meg a napi ${S.settings.targetHours} óra` : "Létszámjelentő esedékes";
     const main = `<button class="chip ${kind} ${selected ? "sel" : ""}" data-action="${kind === "att" ? "dayGo" : "dayFill"}" data-day="${d}" title="${title}">${lead}${esc(formatChip(d))}${extra}</button>`;
-    if (kind !== "missing") return main;
-    return `<span class="chipwrap">${main}<button class="chipoff" data-action="dayOff" data-day="${d}" title="Szabadnapnak jelölöm" aria-label="Szabadnapnak jelölöm: ${esc(formatChip(d))}">${icon("moon", 0.85)}</button></span>`;
+    const hol = holidayName(d), feast = kind !== "att" && hol && !by.get(d)?.some((e) => e.type === "FEAST_DAY");
+    const off = kind === "missing" ? `<button class="chipoff" data-action="dayOff" data-day="${d}" title="Szabadnapnak jelölöm" aria-label="Szabadnapnak jelölöm: ${esc(formatChip(d))}">${icon("moon", 0.85)}</button>` : "";
+    const star = feast ? `<button class="chipoff" data-action="feastDay" data-day="${d}" title="Ünnepnapnak jelölöm: ${esc(hol)}" aria-label="Ünnepnapnak jelölöm: ${esc(hol)}">${icon("sun", 0.85)}</button>` : "";
+    return off || star ? `<span class="chipwrap">${main}${off}${star}</span>` : main;
   };
   const sundays = missing.filter(isSunday);
   return `<section class="card missing"><div class="mhead">${icon(nothing ? "seal" : "calendar", 1.1)}<strong class="small">${esc(parts.length ? parts.join(" · ") : "Nincs kitöltetlen nap")}</strong>
@@ -145,6 +148,11 @@ export const actions = {
     ctx.say(`${formatChip(el.dataset.day)} szabadnapnak jelölve.`);
     const w = monthLimitWarning(ctx.S.entries, r.entry);
     if (w) ctx.say(w, true, 15000);
+  },
+  feastDay(el) {
+    const r = ctx.store.markFeastDay(el.dataset.day);
+    if (!r.ok) { ctx.say(r.error, true); return; }
+    ctx.say(`${formatChip(el.dataset.day)}: ünnepnap felvéve (${r.entry.activity}).`);
   },
   sundaysOff() {
     const by = groupByDate(ctx.S.entries), today = todayYMD();

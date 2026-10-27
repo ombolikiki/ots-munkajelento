@@ -21,6 +21,7 @@ export function entryWhen(e) {
 
 /** Második sor: utazásnál az útvonal (Indulás → Munkahely(ek) → Érkezés), egyébként munkahely · tevékenység. */
 export function entryDetail(e) {
+  if (e.type === "FEAST_DAY" || e.type === "REST_DAY") return e.activity ?? "";   // az Ünnepnap/Pihenőnap sorban a név/leírás látszik
   if (e.departure || e.arrival) {
     const route = [e.departure, ...workplaceList(e.workplace), e.arrival].filter(Boolean)
       .filter((p, i, a) => !i || p.toLowerCase() !== a[i - 1].toLowerCase()).join(" → ");

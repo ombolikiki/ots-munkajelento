@@ -1,6 +1,6 @@
 ---
 name: ots-adminisztracio
-description: OTS Adminisztráció - adminisztrációs feladatok az OTS 4.40 rendszerben ({{OTS_URL}}, Hetednapi Adventista Egyház, {{OTS_NEV}}). Használd, ha a felhasználó az OTS-ben, a Határidők oldalon vagy a {{OTS_NEV}} felületén kér feladatot elvégezni, például gyülekezeti látogatottság (létszámjelentő) kitöltése, határidők listázása, negyedév lezárása.
+description: OTS Adminisztráció - adminisztrációs feladatok az OTS 4.40 rendszerben ({{OTS_URL}}, Hetednapi Adventista Egyház, {{OTS_NEV}}). Használd, ha a felhasználó az OTS-ben, a Határidők oldalon vagy a {{OTS_NEV}} felületén kér feladatot elvégezni, például gyülekezeti látogatottság (létszámjelentő) kitöltése, határidők listázása, negyedév lezárása. Használd akkor is, ha a felhasználó szabad szöveggel leírja, mit csinált (például „ma 9–10 között adminisztráltam, tegnapelőtt volt egy két órás megbeszélésem”), és bejegyzést szeretne felvinni az OTS Munkajelentő Trackerbe.
 ---
 
 # OTS Adminisztráció
@@ -16,10 +16,12 @@ Az OTS 4.40 ({{OTS_URL}}) webes rendszerben végzett adminisztrációs feladatok
 [[TASK:hittan]]| Hitoktatás (Hittan) rögzítése, félévente | [references/hitoktatas.md](references/hitoktatas.md) |[[/TASK]]
 [[TASK:havi]]| Havi munkajelentő (az OTS Munkajelentő Tracker alapján, havonta) | [references/havi-munkajelento.md](references/havi-munkajelento.md) |[[/TASK]]
 [[TASK:koltseg]]| Költségelszámolás (havi útiköltség, az OTS Munkajelentő Tracker Utazás-bejegyzései alapján) | [references/koltsegelszamolas.md](references/koltsegelszamolas.md) |[[/TASK]]
+[[TASK:szabad]]| Bejegyzések felvitele szabad szövegből (az OTS-t nem érinti; az OTS Munkajelentő Tracker importfájljába ír, a felhasználó az alkalmazásban hagyja jóvá) | [references/szabad-szoveg.md](references/szabad-szoveg.md) |[[/TASK]]
 | Határidők kiolvasása, listázása | alább, "Határidők oldal" |
 
 ## Indítás (a skill beolvasása után mindig ezt told előre)
 
+[[TASK:szabad]]**Kivétel:** ha a felhasználó szabad szöveggel írja le, mit csinált (például „ma 9–10 között adminisztráltam”), és bejegyzést szeretne belőle, az az OTS-t **nem érinti**: ne nyisd meg az OTS-t, hanem azonnal a „Bejegyzések felvitele szabad szövegből” feladat leírását kövesd ([references/szabad-szoveg.md](references/szabad-szoveg.md)).[[/TASK]]
 1. Nyisd meg az OTS-t ({{OTS_URL}}, {{OTS_NEV}}), és kérd meg a felhasználót a bejelentkezésre, ha még nem jelentkezett be.
 2. Nyisd meg a **Határidők** menüpontot, és olvasd ki a sorokat (lásd "Határidők oldal").
 3. Listázd ki, hogy a skill feladatai közül melyekhez van ténylegesen Határidő, gyülekezetenként és időszakonként összesítve (pl. "Gyülekezeti névsor: 2026. III. negyedév, {{GYULEKEZETEK}}"). **Amelyik feladathoz nincs Határidő, azt hagyd ki a felsorolásból**, ne említsd.

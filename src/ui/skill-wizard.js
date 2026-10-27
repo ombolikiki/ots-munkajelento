@@ -79,7 +79,7 @@ function tasksStep() {
 }
 
 function details() {
-  const needs = S.neededFields(tasksList(), ui.skill.tasks), tracker = ui.skill.tasks.some((t) => ["havi", "koltseg", "latogatottsag"].includes(t));
+  const needs = S.neededFields(tasksList(), ui.skill.tasks), tracker = ui.skill.tasks.some((t) => S.TRACKER_TASKS.includes(t));
   return `<h2>Adataid</h2><p class="mut">Először: melyik OTS-oldalon dolgozol? A két oldal felépítése megegyezik, a skill a választott címet használja.</p>
     <div class="seg"><button data-action="skillSite" data-site="det" aria-pressed="${ui.skill.site === "det"}">DETKapu</button><button data-action="skillSite" data-site="tet" aria-pressed="${ui.skill.site === "tet"}">TETKapu</button></div>
     <p class="small mut">${esc(S.SITES[ui.skill.site].url)}</p>
@@ -97,7 +97,7 @@ function review() {
     <div class="sumrow"><span>OTS-oldal</span><b>${esc(site.title)} (${esc(site.url)})</b></div>
     <div class="sumrow"><span>Név</span><b>${esc(ui.skill.userName)}</b></div>
     <div class="sumrow"><span>Feladatok</span><b>${esc(names)}</b></div>
-    ${ui.skill.tasks.some((t) => ["havi", "koltseg", "latogatottsag"].includes(t)) ? `<div class="sumrow"><span>Adatmappa</span><b>${esc(ui.skill.dataPath)}</b></div>` : ""}
+    ${ui.skill.tasks.some((t) => S.TRACKER_TASKS.includes(t)) ? `<div class="sumrow"><span>Adatmappa</span><b>${esc(ui.skill.dataPath)}</b></div>` : ""}
     <div class="sumrow"><span>Célok</span><b>${folders.map((f) => esc(f.targets.map((t) => S.TARGETS[t].title).join(" + ")) + ` → <code>${esc(f.path)}</code>`).join("<br>")}</b></div></div>
     <p class="mut small">A „Telepítés” gomb elkészíti a csomagot (ZIP), és megmutatja, hogyan kerül a skill-mappába. Ha már van ilyen nevű skill a mappában, a kicsomagolás előtt készíts róla másolatot (a közvetlen kiírás ezt magától megteszi).</p>`;
 }

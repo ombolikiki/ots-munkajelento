@@ -162,7 +162,7 @@ function prefill(item) {
   const loc = place((ev.location || "").split(/\s[-–—]\s/)[0]).settlement || "";
   dr.workplace = d0 ? d0.workplace : loc; dr.activity = d0 ? d0.activity : ev.title;
   if (item.type && item.type.code === "TRAVEL") {
-    dr.roundTrip = !d0 || !!(d0.departure && d0.departure === d0.arrival);
+    dr.roundTrip = !!(d0 && d0.departure && d0.departure === d0.arrival);
     dr.workplaceIsDeparture = false;
     if (d0) dr.departure = d0.departure || dr.departure;
     dr.destination = d0 ? destinationText(d0) : loc;

@@ -1,6 +1,6 @@
 // Kézi felvitel az OTS-be: számítások (a natív app OTSManual megfelelője, a skill szabályaival egyezően:
 // napi összegzés típusonként, a napi óraösszeg felfelé kerekítése, fő/alkalom darabszám, Munkahely lista).
-import { UNIT, lookupByCode, isCustomCode, isTravel } from "./types.js";
+import { UNIT, lookupByCode, isCustomCode, isTravel, wholeDayWorkplace } from "./types.js";
 import { monthDays, parseYMD } from "./dates.js";
 import { dueDatesBetween } from "./dates.js";
 import { place, fold } from "./calendarParser.js";
@@ -94,7 +94,11 @@ export function workRow(day, dayEntries, rules, today) {
   if (whole.some((e) => e.type === "PUBLIC_HOLIDAY")) { row.workplace = "MUNKASZÜNETI NAP"; row.hasData = true; }
   if (row.hasData) return row;
 
+  // Ünnepnap és Pihenőnap: `ÜNNEPNAP - <NÉV>` / `PIHENŐNAP - <LEÍRÁS>` a Munkahely mező elején (a típus kódból és a Tevékenységből számolva); munkabejegyzés mellett is felvehető
+  const feastText = whole.filter((e) => e.type === "FEAST_DAY" || e.type === "REST_DAY").map((e) => wholeDayWorkplace(lookupByCode(e.type), e.activity)).join(", ");
+
   if (!timed.length) {
+    if (feastText) { row.workplace = feastText; row.hasData = true; return row; }
     if (rules) {   // OTS-szempontból üres nap
       row.workplace = "!!!";
       row.notes.push("üres nap: !!! jelölés");
@@ -119,7 +123,7 @@ export function workRow(day, dayEntries, rules, today) {
   }
 
   const places = workplaceList(timed);
-  row.workplace = places.join(", ");
+  row.workplace = [feastText, places.join(", ")].filter(Boolean).join(", ");
   row.values = Object.fromEntries(Object.entries(values).filter(([, v]) => v > 0));
   return row;
 }

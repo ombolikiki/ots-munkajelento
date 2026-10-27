@@ -104,3 +104,21 @@ test("a számítás nem omlik össze hibás bemenettől", () => {
   assert.deepEqual(M.costRows([], 2026, 13, "A"), []);
   assert.deepEqual(M.routePoints({ workplace: ",, ,", departure: null, arrival: undefined }, ""), []);
 });
+
+test("Ünnepnap és Pihenőnap: OTS-szöveg a típus kódból és a Tevékenységből (nagybetűvel), munka mellett is; nincs !!!", () => {
+  const feast = (d, act) => e(d, "FEAST_DAY", { unit: "egesz_nap", durationSeconds: 0, workplace: "", activity: act });
+  const rest = (d, act) => e(d, "REST_DAY", { unit: "egesz_nap", durationSeconds: 0, workplace: "", activity: act });
+  assert.equal(row("2026-10-06", [feast("2026-10-06", "Október 23. (nemzeti ünnep)")], true).workplace, "ÜNNEPNAP - OKTÓBER 23. (NEMZETI ÜNNEP)");
+  assert.equal(row("2026-10-06", [rest("2026-10-06", "áthelyezett munkanap miatt")], true).workplace, "PIHENŐNAP - ÁTHELYEZETT MUNKANAP MIATT");
+  assert.equal(row("2026-10-06", [rest("2026-10-06", "")], true).workplace, "PIHENŐNAP");   // leírás nélkül csak a típus neve
+  const alone = row("2026-10-06", [feast("2026-10-06", "Újév")], true);
+  assert.deepEqual([alone.hasData, alone.values, M.workIsEmpty(alone)], [true, {}, false]);   // a sor többi része üres, nem !!!
+  const work = e("2026-10-06", "MEETING", { durationSeconds: 3600, workplace: "Győr" }), work2 = e("2026-10-06", "VISITING", { unit: "fo", quantity: 2, workplace: "Tata" });
+  const mixed = row("2026-10-06", [feast("2026-10-06", "Október 23. (nemzeti ünnep)"), work, work2], true);
+  assert.equal(mixed.workplace, "ÜNNEPNAP - OKTÓBER 23. (NEMZETI ÜNNEP), Győr, Tata");   // a munkabejegyzések helyei vesszővel
+  assert.deepEqual(mixed.values, { MEETING: 1, VISITING: 2 });   // és a munkabejegyzések óráit is be kell írni
+  assert.equal(row("2026-10-06", [feast("2026-10-06", "Újév"), rest("2026-10-06", "x")], true).workplace, "ÜNNEPNAP - ÚJÉV, PIHENŐNAP - X");   // több: vesszővel előre
+  assert.equal(row("2026-10-06", [feast("2026-10-06", "Újév"), e("2026-10-06", "DAY_OFF", { unit: "egesz_nap", durationSeconds: 0 })], true).workplace, "SZABADNAP");   // a Szabadnap sor marad
+  assert.equal(row("2026-10-25", [feast("2026-10-25", "Újév")]).workplace, "");   // jövő: üres
+  assert.equal(M.workplaceList([feast("2026-10-06", "Újév"), work]).includes("ÜNNEPNAP"), false);
+});

@@ -21,7 +21,22 @@ export const BUILTIN_TYPES = [
   t("HOLIDAY", "Nem munkaidő", "Szabadság", null, UNIT.WHOLE_DAY),
   t("DAY_OFF", "Nem munkaidő", "Szabadnap", null, UNIT.WHOLE_DAY),
   t("PUBLIC_HOLIDAY", "Nem munkaidő", "Munkaszüneti nap", null, UNIT.WHOLE_DAY),
+  // Ünnepnap: a heti munkaszüneti nap és szabadnap felett jár; az OTS-be `ÜNNEPNAP - <NÉV>` kerül (nem OTS-rács mező). A havi korlátba nem számít.
+  t("FEAST_DAY", "Nem munkaidő", "Ünnepnap", null, UNIT.WHOLE_DAY),
+  // Pihenőnap (rendelettel változó); az OTS-be `PIHENŐNAP - <leírás>` kerül. A havi korlátba nem számít.
+  t("REST_DAY", "Nem munkaidő", "Pihenőnap", null, UNIT.WHOLE_DAY),
 ];
+
+/**
+ * Az egész napos bejegyzés Munkahely értéke (az OTS Munkahely mezőjébe ez kerül): `SZABADNAP`, `MUNKASZÜNETI NAP`, …; az Ünnepnapnál és a
+ * Pihenőnapnál `ÜNNEPNAP - <NÉV>` illetve `PIHENŐNAP - <LEÍRÁS>` (nagybetűvel; leírás nélkül csak a típus neve).
+ */
+export function wholeDayWorkplace(type, note) {
+  const base = String(type?.shortLabel ?? "").toUpperCase();
+  if (!type || (type.code !== "FEAST_DAY" && type.code !== "REST_DAY")) return base;
+  const n = String(note ?? "").trim();
+  return n ? `${base} - ${n.toUpperCase()}` : base;
+}
 
 export const isCustomCode = (code) => String(code ?? "").toUpperCase().startsWith(CUSTOM_PREFIX);
 export const isTravel = (type) => !!type && type.code === "TRAVEL";

@@ -2,7 +2,9 @@
 // a bejegyzések, a létszámjelentések és a mutatófájl automatikusan a mappába is íródnak (lásd folder.js).
 import { emptyDraft, draftType, missingHint, timedEntry, learnPlaces, sortEntries, mergeEntries, applyType, clearedDraft, migrateDraft, clampStart, wholeDayEntry } from "./entries.js";
 import { parseYMD } from "./dates.js";
-import { lastEndKm, kmValue, kmProblem, monthKm } from "./entries.js";
+import { lastEndKm, kmValue, kmProblem, monthKm, reverseTrip } from "./entries.js";
+import { holidayName } from "./holidays.js";
+import { IMPORT_FILE, items as importItems } from "./importReview.js";
 import { isWholeDay, configureTypes, lookupByCode, BUILTIN_TYPES, makeCustomCode, normalizeHex, UNIT } from "./types.js";
 import { encodeBytes, decode } from "./csv.js";
 import * as ATT from "./attendance.js";
@@ -112,6 +114,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     done: (() => { const d = read(storage, KEYS.done, {}); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; })(),
     meta: { lastExport: null, dirty: false, entriesMod: null, attMod: null, ...(read(storage, KEYS.meta, {}) || {}) },
     sync: { error: null, warning: null },
+    imports: { items: [], notes: [], stamp: null },   // a szabad szöveggel felvitt, áttekintésre váró bejegyzések (nem tárolódik: az importfájl a forrás)
   };
   if (!state.timer || typeof state.timer.startMs !== "number") state.timer = null;
   state.draft.quantity = int(state.draft.quantity, 1, 99, 1);
@@ -119,6 +122,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
   configureTypes({ custom: state.settings.customCategories, hidden: state.settings.hiddenTypes, colors: state.settings.categoryColors });
 
   let lastPomoTickMs = null;
+  let travelAuto = null;   // a legutóbb automatikusan kitöltött (fordított út) Kiindulás, Cél és Tevékenység
   const SLEEP_GAP_MS = 120000, HEARTBEAT_MS = 10000;
   const kmCtx = (day) => ({ entries: state.entries, day: day || todayYMD() });
   const fieldsComplete = (day) => !missingHint(state.draft, kmCtx(day));
@@ -251,7 +255,7 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     // ---------- Űrlap ----------
     saveDraft() { write(KEYS.draft, state.draft); },
     setDraftType(code) { state.draft = applyType(state.draft, code, state.settings.home); write(KEYS.draft, state.draft); },
-    resetDraft() { state.draft = clearedDraft(state.draft, ""); prefillKm(); write(KEYS.draft, state.draft); },
+    resetDraft() { travelAuto = null; state.draft = clearedDraft(state.draft, ""); prefillKm(); write(KEYS.draft, state.draft); },
 
     // ---------- Beállítások ----------
     saveSettings(patch) {
@@ -308,6 +312,46 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
     },
     /** A hónap (a megadott napé) autós km-ei: az utak összege (csak a mindkét állással rögzítettek), és hány útból hiányzik valamelyik állás. */
     monthKm(day) { return monthKm(state.entries, day); },
+    /**
+     * Ha a bejegyzés napján már van Utazás, az új Utazás-űrlap alapból annak a fordítottja (Kiindulás, Cél, Tevékenység). Csak akkor írja át a mezőket, ha a
+     * felhasználó még nem szerkesztette őket (üresek, a székhely, vagy az előző automatikus kitöltés); ha nincs (fordítható) út, az automatikus kitöltés visszaáll
+     * az alapra. A nap: kézi bevitelnél a kiválasztott nap, egyébként a mai (vagy a naptári rés napja). Visszatér, hogy változott-e az űrlap.
+     */
+    prefillReverseTrip(day = todayYMD()) {
+      const d = state.draft;
+      if (d.typeCode !== "TRAVEL") return false;
+      const home = String(state.settings.home ?? "").trim();
+      const initial = !d.destination.trim() && (!d.departure.trim() || d.departure === home);
+      const auto = !!travelAuto && travelAuto.dep === d.departure && travelAuto.dest === d.destination && travelAuto.act === d.activity;
+      if (!initial && !auto) return false;
+      const prev = [...state.entries].reverse().find((e) => e.date === day && e.type === "TRAVEL");
+      const rev = prev ? reverseTrip(prev, home) : null;
+      if (rev) {
+        const act = !d.activity.trim() || auto ? prev.activity : d.activity;
+        if (d.departure === rev.departure && d.destination === rev.destination && d.activity === act) { travelAuto = { dep: d.departure, dest: d.destination, act: d.activity }; return false; }
+        state.draft = { ...d, departure: rev.departure, destination: rev.destination, activity: act };
+        travelAuto = { dep: rev.departure, dest: rev.destination, act };
+      } else if (auto) {
+        state.draft = { ...d, departure: home, destination: "", activity: "" };
+        travelAuto = null;
+      } else return false;
+      write(KEYS.draft, state.draft);
+      return true;
+    },
+    /**
+     * Ünnepnap bejegyzés felvétele a magyar munkaszüneti napra (a Tevékenységben az ünnep hivatalos neve; az OTS-be `ÜNNEPNAP - <NÉV>` kerül). Felvehető
+     * akkor is, ha a napon van munkabejegyzés. Kétszer nem vehető fel; jövőbeli napra és nem ünnepnapra nem. Visszatér {ok, entry} vagy {ok:false, error}.
+     */
+    markFeastDay(day, today = todayYMD()) {
+      if (!parseYMD(day)) return { ok: false, error: "Érvénytelen nap." };
+      if (day > today) return { ok: false, error: "Jövőbeli napot nem lehet ünnepnapnak jelölni." };
+      const name = holidayName(day);
+      if (!name) return { ok: false, error: "Ez a nap nem munkaszüneti nap, ezért nem jelölöm ünnepnapnak (a Pihenőnap típussal kézzel jelölheted)." };
+      if (state.entries.some((e) => e.date === day && e.type === "FEAST_DAY")) return { ok: false, error: "Erre a napra már van Ünnepnap bejegyzés." };
+      const entry = wholeDayEntry({ ...emptyDraft(), typeCode: "FEAST_DAY", activity: name }, day);
+      api.addEntry(entry);
+      return { ok: true, entry };
+    },
     deleteEntry(id) {
       const oldLast = lastEndKm(state.entries);
       state.entries = state.entries.filter((e) => e.id !== id);
@@ -500,6 +544,51 @@ export function createStore(storage, { folder = null, onSyncChange = () => {} } 
       }
       if (before.session && nowMs - before.session.lastAlive >= HEARTBEAT_MS) { state.pomo = P.alive(before, nowMs); write(KEYS.pomo, state.pomo); }
       return null;
+    },
+
+    // ---------- Szabad szöveges rögzítés: az adatmappa melletti bejegyzesek-import.csv áttekintése ----------
+    /**
+     * Beolvassa az importfájlt (csak ha változott, vagy `force`), és frissíti az áttekintésre váró bejegyzések listáját.
+     * Visszatér {changed, grew}: változott-e a lista, és nőtt-e (új bejegyzések érkeztek: értesítés).
+     */
+    async refreshImport({ force = false } = {}) {
+      const im = state.imports;
+      if (!folder || !folder.ready) { const had = im.items.length > 0; im.items = []; im.notes = []; im.stamp = null; return { changed: had, grew: false }; }
+      return queue(async () => {
+        let mod;
+        try { mod = await folder.modified(IMPORT_FILE); } catch { return { changed: false, grew: false }; }
+        if (mod == null) { const had = im.items.length > 0 || im.notes.length > 0; im.items = []; im.notes = []; im.stamp = null; return { changed: had, grew: false }; }
+        if (!force && mod === im.stamp) return { changed: false, grew: false };
+        const f = await folder.read(IMPORT_FILE);
+        if (!f) return { changed: false, grew: false };
+        im.stamp = mod;
+        const before = im.items.length;
+        const r = importItems(new TextDecoder("utf-8").decode(f.bytes), state.entries, Date.now());
+        im.items = r.items; im.notes = r.notes;
+        return { changed: true, grew: im.items.length > before };
+      });
+    },
+    /** A kijelölt (elfogadható) bejegyzések felvétele az adatok közé; a fájlból kikerülnek. Visszatér a felvett darabszámmal. */
+    async acceptImport(ids) {
+      const set = new Set(ids), im = state.imports;
+      const take = im.items.filter((i) => set.has(i.entry.id) && i.acceptable);
+      for (const i of take) api.addEntry(i.entry);
+      await api._removeFromImport(new Set(take.map((i) => i.entry.id)));
+      return take.length;
+    },
+    /** A kijelölt bejegyzések elvetése (a fájlból is kikerülnek). */
+    async discardImport(ids) { await api._removeFromImport(new Set(ids)); },
+    async _removeFromImport(ids) {
+      const im = state.imports;
+      const remaining = im.items.filter((i) => !ids.has(i.entry.id));
+      if (folder && folder.ready) {
+        await queue(async () => {
+          if (!remaining.length) await folder.remove(IMPORT_FILE);
+          else im.stamp = await folder.write(IMPORT_FILE, encodeBytes(remaining.map((i) => i.entry)));
+        });
+      }
+      im.items = remaining;
+      if (!remaining.length) { im.notes = []; im.stamp = null; }
     },
 
     // ---------- Adatmappa ----------

@@ -263,6 +263,7 @@ input.num { text-align: right; padding: 4px 6px; min-height: 30px; }
 .modal { background: var(--panel); border: 1px solid var(--line2); border-radius: var(--r3); box-shadow: 0 24px 80px rgba(0, 0, 0, .35); display: flex; flex-direction: column; overflow: hidden; max-height: 100%; }
 .modal.ots { width: min(1060px, 100%); height: min(760px, 100%); }
 .modal.skill { width: min(640px, 100%); height: min(720px, 100%); }
+.modal.import { width: min(720px, 100%); height: min(640px, 100%); }
 .modaltitle { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px 18px; }
 .modalhead { padding: 4px 18px 10px; display: flex; flex-direction: column; gap: var(--s2); border-bottom: 1px solid var(--line); }
 .mtool { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
@@ -354,3 +355,16 @@ button.cp:hover { background: color-mix(in srgb, var(--ac) 14%, transparent); co
 .fieldlock { border: 0; padding: 0; margin: 0; min-width: 0; }
 .fieldlock[disabled] { opacity: .65; }
 .lockmsg { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+
+/* Ünnepnap egy kattintással a Kézi bevitelnél */
+.feastbtn { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 var(--s3); border: 0; border-radius: 999px; padding: 4px 12px; font-size: var(--t-sm); font-weight: 600; background: color-mix(in srgb, var(--warn) 18%, var(--card)); cursor: pointer; }
+
+/* Szabad szöveges rögzítés: áttekintés */
+.importbtn { display: inline-flex; align-items: center; gap: 3px; color: var(--warn); width: auto; padding: 0 8px; }
+.importbtn b { font-size: 11px; font-variant-numeric: tabular-nums; }
+.implist { display: flex; flex-direction: column; gap: 8px; margin: var(--s3) 0; }
+.improw { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 10px; background: var(--field); }
+.improw.bad { background: transparent; border: 1px solid color-mix(in srgb, var(--stop) 50%, transparent); }
+.improw input[type="checkbox"] { margin-top: 3px; accent-color: var(--ac); }
+.impmain { flex: 1; min-width: 0; } .impmain .t { font-weight: 600; } .impmain .d { color: var(--mut); font-size: var(--t-sm); overflow-wrap: anywhere; }
+.improw .amt { font-variant-numeric: tabular-nums; }

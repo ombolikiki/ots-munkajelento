@@ -82,7 +82,7 @@ test("a Start/Rögzítés gomb állapota beíráskor változik", () => {
   assert.equal(E.gate("timer", draft()).disabled, true);
 });
 
-const travel = (o = {}) => draft({ typeCode: "TRAVEL", destination: "Tata", activity: "Kiszállás", departure: "Győr", ...o });
+const travel = (o = {}) => draft({ typeCode: "TRAVEL", destination: "Tata", activity: "Kiszállás", departure: "Győr", roundTrip: true, ...o });   // a legtöbb teszt oda-vissza utat vizsgál (az alapérték egyirányú)
 const entryOf = (d) => E.manualEntry(d, { day: "2026-10-04", mode: "duration", hours: 0, minutes: 30, now }).entry;
 const pts = (e) => M.routePoints(e, "X");
 const S = (settlement, address = null) => ({ settlement, address });
@@ -114,8 +114,9 @@ test("helyek a Célban: vesszős lista, cím a megelőző településhez, fordí
   for (const bad of ["", "  ,  ", "12", "Fő utca 3", "Fő út 1."]) assert.equal(pl(bad), null, bad);
 });
 
-test("Utazás: Kiindulás, Cél, oda-vissza (alapból), egyirányú", () => {
-  assert.equal(E.emptyDraft().roundTrip, true); assert.equal(E.emptyDraft().workplaceIsDeparture, false);
+test("Utazás: Kiindulás, Cél, egyirányú (alapból), oda-vissza", () => {
+  assert.equal(E.emptyDraft().roundTrip, false); assert.equal(E.clearedDraft().roundTrip, false);
+  assert.deepEqual(pts(entryOf(draft({ typeCode: "TRAVEL", destination: "Tata", activity: "x", departure: "Győr" }))), ["Győr", "Tata"]);   // alapból egyirányú assert.equal(E.emptyDraft().workplaceIsDeparture, false);
   let e = entryOf(travel());
   assert.deepEqual(pts(e), ["Győr", "Tata", "Győr"]); assert.ok(e.departure === "Győr" && e.arrival === "Győr" && e.workplace === "Tata" && !e.workplaceIsDeparture);
   e = entryOf(travel({ destination: "Tata, Mór" }));
@@ -220,4 +221,23 @@ test("km: előző út a napig (bezárólag), előtöltés, az Utazás űrlap hib
   assert.deepEqual([plain.startKm, plain.endKm], [null, null]);   // nem Utazás soha nem kap km-et
   assert.deepEqual(E.monthKm([...list, tripEntry("z", "2026-11-02", 1, 5)], "2026-10-15"), { km: 100, incomplete: 1 });
   assert.equal(E.gate("manual", d({ startKm: "x" }), { entries: list, day: "2026-10-06" }).disabled, true);
+});
+
+test("az út fordítottja: a pontos címek a helyükkel együtt fordulnak, oda-vissza útnál nincs fordítás", () => {
+  const e = (o) => entryOf(travel({ roundTrip: false, ...o }));
+  assert.deepEqual(E.reverseTrip(e({ departure: "Győr", destination: "Tata, Mór" }), "Győr"), { departure: "Mór", destination: "Tata, Győr" });
+  assert.deepEqual(E.reverseTrip(e({ departure: "Győr", destination: "Nyúl" }), "Győr"), { departure: "Nyúl", destination: "Győr" });
+  assert.deepEqual(E.reverseTrip(e({ departure: "Győr, Fő út 1.", destination: "Tata, Kossuth u. 5., Mór" }), "Győr"), { departure: "Mór", destination: "Tata, Kossuth u. 5., Győr, Fő út 1." });
+  assert.equal(E.reverseTrip(entryOf(travel({ roundTrip: true })), "Győr"), null);   // oda-vissza: nincs fordítás
+  assert.equal(E.reverseTrip(entryOf(travel({ departure: "Győr", destination: "Győr" })), "Győr"), null);
+  assert.equal(E.placeText("Tata", "Fő út 1., Tata"), "Tata, Fő út 1.");
+});
+
+test("Ünnepnap és Pihenőnap: egész napos típus, a Munkahely a nagybetűs OTS-szöveg, Megjegyzés a Tevékenység", () => {
+  const f = E.manualEntry(draft({ typeCode: "FEAST_DAY", activity: "Újév" }), { day: "2026-10-05", existing: [], now }).entry;
+  assert.deepEqual([f.unit, f.workplace, f.activity, f.durationSeconds, f.type], ["egesz_nap", "ÜNNEPNAP - ÚJÉV", "Újév", 0, "FEAST_DAY"]);
+  const r = E.manualEntry(draft({ typeCode: "REST_DAY", activity: "" }), { day: "2026-10-05", existing: [], now }).entry;
+  assert.deepEqual([r.workplace, r.activity], ["PIHENŐNAP", ""]);
+  assert.equal(E.manualEntry(draft({ typeCode: "FEAST_DAY" }), { day: "2026-10-05", existing: [f], now }).ok, false);   // ugyanarra a napra kétszer nem
+  assert.equal(E.manualEntry(draft({ typeCode: "FEAST_DAY" }), { day: "2026-10-06", existing: [], now }).ok, false);   // jövő
 });

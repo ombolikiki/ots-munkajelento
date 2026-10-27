@@ -6,6 +6,7 @@ import { folderSupported } from "../folder.js";
 import { ctx, ui } from "./ctx.js";
 import { esc } from "./util.js";
 import { icon } from "./icons.js";
+import * as impUI from "./import-ui.js";
 import { SOUNDS, NO_SOUND, playSound } from "./sound.js";
 import { calendarSettingsHTML } from "./calendar-ui.js";
 
@@ -134,6 +135,10 @@ function folderCard(s) {
     <input type="file" id="importFile" accept=".csv,text/csv,text/plain" hidden>`);
 }
 
+function freeTextCard() {
+  return card("Szabad szöveges rögzítés", impUI.settingsBodyHTML());
+}
+
 function skillCard() {
   return card("Skill: OTS Adminisztráció (Claude, ChatGPT/Codex, Antigravity CLI)", `<p class="small mut">Az MI-asszisztens ezzel tölti ki helyetted az OTS adminisztrációt (Havi munkajelentő, Költségelszámolás, névsor, Hittan, Látogatottság), és ennek az alkalmazásnak az adataiból dolgozik. Az Antigravity CLI ingyenes megoldás (személyes Google-fiókkal).</p>
     <p class="small mut">Ha nem a skillel dolgozol, a bejegyzéseket kézzel is felviheted: a külön ablakban naptárban, felsorolásban és az OTS táblázatának megfelelően látod őket.</p>
@@ -160,7 +165,7 @@ function resetCard() {
 
 export function settingsHTML() {
   const s = ctx.S.settings;
-  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), calendarSettingsHTML(), placesCard(s), kmCard(s), categoriesCard(s), folderCard(s), skillCard(), installCard(), resetCard(),
+  return [appearanceCard(s), soundsCard(s), calendarCard(s), remindersCard(s), attendanceCard(s), calendarSettingsHTML(), placesCard(s), kmCard(s), categoriesCard(s), folderCard(s), skillCard(), freeTextCard(), installCard(), resetCard(),
     `<p class="small mut center">OTS Munkajelentő (web) ${VERSION} · <a href="adatvedelem.html" target="_blank" rel="noopener">Adatvédelem</a> · <a href="felhasznalasi-feltetelek.html" target="_blank" rel="noopener">Felhasználási feltételek</a></p>`].join("");
 }
 

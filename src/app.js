@@ -18,6 +18,7 @@ import * as settings from "./ui/settings.js";
 import * as ots from "./ui/ots.js";
 import * as wiz from "./ui/skill-wizard.js";
 import * as calui from "./ui/calendar-ui.js";
+import * as imp from "./ui/import-ui.js";
 import { playSound, notify, NO_SOUND } from "./ui/sound.js";
 import { parseYMD, formatMonth } from "./dates.js";
 
@@ -67,7 +68,7 @@ function todaySummary() {
 
 function headerHTML() {
   return `<header class="apphead"><div class="logo">${icon("logo", 1.2)}</div><div class="titles"><h1>OTS Munkajelentő Tracker</h1><p>${esc(todaySummary())}</p></div>
-    <button class="iconbtn" data-action="openOts" title="Kézi felvitel az OTS-be: a bejegyzések listája és táblázata" aria-label="Kézi felvitel az OTS-be">${icon("tablecells", 1.25)}</button>
+    ${imp.headerButtonHTML()}<button class="iconbtn" data-action="openOts" title="Kézi felvitel az OTS-be: a bejegyzések listája és táblázata" aria-label="Kézi felvitel az OTS-be">${icon("tablecells", 1.25)}</button>
     <button class="iconbtn" data-action="toggleSettings" title="${ui.settings ? "Vissza" : "Beállítások"}" aria-label="${ui.settings ? "Vissza" : "Beállítások"}">${icon(ui.settings ? "x" : "gear", 1.25)}</button></header>`;
 }
 
@@ -129,8 +130,8 @@ function bodyHTML() {
 
 function modalHTML() {
   if (!ui.modal) return "";
-  const title = ui.modal === "ots" ? "Kézi felvitel az OTS-be" : "OTS Adminisztráció skill telepítése";
-  const inner = ui.modal === "ots" ? ots.otsHTML() : wiz.skillHTML();
+  const title = ui.modal === "ots" ? "Kézi felvitel az OTS-be" : ui.modal === "import" ? "Szabad szöveges rögzítés: áttekintés" : "OTS Adminisztráció skill telepítése";
+  const inner = ui.modal === "ots" ? ots.otsHTML() : ui.modal === "import" ? imp.importHTML() : wiz.skillHTML();
   return `<div class="overlay" data-action="modalBackdrop"><div class="modal ${ui.modal}" role="dialog" aria-modal="true" aria-label="${title}">
     <div class="modaltitle"><strong>${title}</strong><button class="iconbtn" data-action="modalClose" aria-label="Bezárás">${icon("x")}</button></div>${inner}</div></div>`;
 }
@@ -144,6 +145,7 @@ function render() {
   const winY = window.scrollY, active = document.activeElement, activeId = active && active.id;
   const app = $("#app");
   sugg.hide();
+  if (!ui.settings) store.prefillReverseTrip(capture.kmDay());   // az Utazás-űrlap a napon belüli előző út fordítottjával töltődik elő
   app.innerHTML = `<div class="panel ${ui.settings ? "is-settings" : ""}">${headerHTML()}${bannersHTML()}${ui.settings ? "" : reminderHTML() + folderBannerHTML()}${bodyHTML()}</div>${modalHTML()}`;
   document.querySelectorAll("[data-keep-scroll]").forEach((el) => { if (keep[el.dataset.keepScroll] != null) el.scrollTop = keep[el.dataset.keepScroll]; });
   if (ui.mode === "calendar" && !ui.settings && keep.cal == null) { const c = $("#calscroll"); if (c) c.scrollTop = 0; }
@@ -155,7 +157,7 @@ function render() {
 // ---------- Műveletek ----------
 
 const actions = {
-  ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions, ...calui.actions,
+  ...capture.actions, ...cal.actions, ...lower.actions, ...settings.actions, ...ots.actions, ...wiz.actions, ...calui.actions, ...imp.actions,
   tab(el) { ui.mode = el.dataset.tab; if (ui.mode !== "calendar") ui.pending = null; ui.msg = null; },
   pick(el) { fieldsPick(el); },
   pickType(el) { store.setDraftType(el.dataset.code); document.querySelectorAll("details.menu[open]").forEach((d) => d.removeAttribute("open")); },
@@ -283,9 +285,24 @@ cal.initCalendarPointer();
 
 // ---------- Másodpercenkénti léptetés (a háttérben is pontos, Web Workerből) ----------
 
-let lastDay = todayYMD();
+let lastDay = todayYMD(), importTick = 0;
+/** Az importfájl ellenőrzése (időnként és az ablak előtérbe kerülésekor); új bejegyzéseknél értesítés. */
+async function checkImport(announce = true) {
+  try {
+    const r = await store.refreshImport();
+    if (r.changed) {
+      if (r.grew && announce) {
+        const n = S.imports.items.length;
+        if (S.settings.notifications) notify("Új bejegyzések várnak jóváhagyásra", `${n} bejegyzés a szabad szöveges rögzítésből. Nyisd meg az áttekintést a fejlécben.`);
+        const snd = S.settings.soundBreakEnd; if (snd && snd !== NO_SOUND) playSound(snd);
+      }
+      render();
+    }
+  } catch { /* nem baj */ }
+}
 function onTick() {
   const now = Date.now();
+  if (++importTick % 5 === 0) checkImport();
   const r = store.tickPomo(now);
   if (r) {
     if (r.slept) ctx.say("A gép elaludt: a Pomodoro-munkamenet az altatás előtti ponton lezárult és rögzült. Új pomo indítható.", false, 9000);
@@ -313,10 +330,10 @@ async function refreshFromFolder() {
   try { if (await store.reloadIfChanged()) render(); } catch { /* nem baj */ }
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); refreshFromFolder(); render(); }
+  if (document.visibilityState === "visible") { if (ui.day > todayYMD()) ui.day = todayYMD(); refreshFromFolder(); checkImport(); render(); }
   else store.flush();
 });
-window.addEventListener("focus", () => { refreshFromFolder(); calui.maybeSyncOnFocus(); });
+window.addEventListener("focus", () => { refreshFromFolder(); checkImport(); calui.maybeSyncOnFocus(); });
 window.addEventListener("pagehide", () => { store.flush(); });
 
 navigator.storage?.persist?.().catch(() => {});
